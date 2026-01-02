@@ -1,21 +1,14 @@
 plugins {
-    kotlin("jvm") version "2.2.20"
+    kotlin("jvm") version "1.9.22" apply false
+    kotlin("plugin.spring") version "1.9.22" apply false
+    kotlin("plugin.jpa") version "1.9.22" apply false
 }
+subprojects {
 
-group = "com.sparjapati"
-version = "1.0-SNAPSHOT"
+    group = "com.sparjapati"
+    version = "0.0.1"
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    testImplementation(kotlin("test"))
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
-kotlin {
-    jvmToolchain(21)
+    repositories {
+        mavenCentral()
+    }
 }
