@@ -35,10 +35,9 @@ class DbStoreCachingConfiguration(
         LOGGER.info("🔍 Validating DbStore caching prerequisites...")
 
         // 1️⃣ DbStoreService must exist
-        val dbStoreService =
-            applicationContext.getBeanProvider(DbStoreService::class.java)
-                .ifAvailable
-                ?: fail("DbStoreService bean not found")
+        applicationContext.getBeanProvider(DbStoreService::class.java)
+            .ifAvailable
+            ?: fail("DbStoreService bean not found")
 
         // 2️⃣ DataSource must exist (MySQL or compatible)
         applicationContext.getBeanProvider(DataSource::class.java)
@@ -57,7 +56,7 @@ class DbStoreCachingConfiguration(
                 it.javaType.name ==
                         "com.sparjapati.mysqlDbstore.entity.DbStoreCacheEntryEntity"
             }
-        } catch (ex: Exception) {
+        } catch (_: Exception) {
             false
         }
 
