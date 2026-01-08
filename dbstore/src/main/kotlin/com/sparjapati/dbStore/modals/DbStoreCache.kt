@@ -1,4 +1,4 @@
-package com.sparjapati.modals
+package com.sparjapati.dbStore.modals
 
 import java.time.LocalDateTime
 

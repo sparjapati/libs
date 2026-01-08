@@ -1,6 +1,6 @@
-package com.sparjapati.mysqlDbstore.entity
+package com.sparjapati.dbStore.mysqlDbstore.entity
 
-import com.sparjapati.modals.DbStoreCache
+import com.sparjapati.dbStore.modals.DbStoreCache
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id

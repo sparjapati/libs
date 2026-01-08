@@ -1,6 +1,6 @@
-package com.sparjapati.annotation
+package com.sparjapati.dbStore.annotation
 
-import com.sparjapati.config.DbStoreCachingConfiguration
+import com.sparjapati.dbStore.config.DbStoreCachingConfiguration
 import org.springframework.context.annotation.Import
 
 @Target(AnnotationTarget.CLASS)

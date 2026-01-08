@@ -1,4 +1,4 @@
-package com.sparjapati.annotation
+package com.sparjapati.dbStore.annotation
 
 @Target(
     AnnotationTarget.FUNCTION,

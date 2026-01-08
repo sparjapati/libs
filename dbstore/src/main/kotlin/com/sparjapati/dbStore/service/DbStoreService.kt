@@ -1,6 +1,6 @@
-package com.sparjapati.service
+package com.sparjapati.dbStore.service
 
-import com.sparjapati.modals.DbStoreCache
+import com.sparjapati.dbStore.modals.DbStoreCache
 import java.time.LocalDateTime
 
 interface DbStoreService {

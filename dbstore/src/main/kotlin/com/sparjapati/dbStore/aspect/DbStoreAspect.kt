@@ -1,8 +1,8 @@
-package com.sparjapati.aspect
+package com.sparjapati.dbStore.aspect
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sparjapati.annotation.DbStoreCacheable
-import com.sparjapati.service.DbStoreService
+import com.sparjapati.dbStore.annotation.DbStoreCacheable
+import com.sparjapati.dbStore.service.DbStoreService
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect

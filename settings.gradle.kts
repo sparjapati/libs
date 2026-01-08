@@ -6,3 +6,4 @@ pluginManagement {
 }
 rootProject.name = "libs"
 include("dbstore")
+include("entityLookup")

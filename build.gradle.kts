@@ -13,3 +13,6 @@ subprojects {
 project(":dbstore") {
     version = property("dbstoreVersion") as String
 }
+project(":entityLookup") {
+    version = property("entityLookupVersion") as String
+}

@@ -17,6 +17,7 @@ spring-data-bom = { module = "org.springframework.data:spring-data-bom", version
 spring-context = { module = "org.springframework:spring-context" }
 spring-aop = { module = "org.springframework:spring-aop" }
 spring-tx = { module = "org.springframework:spring-tx" }
+spring-web = { module = "org.springframework:spring-web" }
 
 spring-data-jpa = { module = "org.springframework.data:spring-data-jpa" }
 
@@ -30,5 +31,5 @@ slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 spring-core = [
     "spring-context",
     "spring-aop",
-    "spring-tx"
+    "spring-tx",
 ]

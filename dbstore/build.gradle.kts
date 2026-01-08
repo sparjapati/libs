@@ -14,7 +14,10 @@ dependencies {
     api(libs.aspectj.weaver)
     implementation(libs.jackson.databind)
     implementation(libs.slf4j.api)
-}9053204221
+}
+java {
+    withSourcesJar()
+}
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
