@@ -32,7 +32,7 @@ class DbStoreAspect(
             return pjp.proceed()
         }
 
-        check(cacheable.cacheName.isNotBlank() && cacheable.key.isNotBlank()) {
+        check(cacheable.cacheName.isNotBlank() || cacheable.key.isNotBlank()) {
             "Both cacheName and key can't be blank."
         }
         val fullKey = getKey(pjp, cacheable)
