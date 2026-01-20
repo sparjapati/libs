@@ -6,6 +6,7 @@ plugins {
 }
 java {
     withSourcesJar()
+    withJavadocJar()
 }
 dependencies {
     api(platform(libs.spring.framework.bom))

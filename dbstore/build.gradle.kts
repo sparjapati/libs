@@ -17,6 +17,7 @@ dependencies {
 }
 java {
     withSourcesJar()
+    withJavadocJar()
 }
 publishing {
     publications {
