@@ -1,9 +1,12 @@
 package com.sparjapati.dbStore.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sparjapati.dbStore.aspect.DbStoreAspect
+import com.sparjapati.dbStore.aspect.DbStoreCacheEvictAspect
+import com.sparjapati.dbStore.aspect.DbStoreCachePutAspect
+import com.sparjapati.dbStore.aspect.DbStoreCacheableAspect
 import com.sparjapati.dbStore.mysqlDbstore.repository.MysqlDbStoreCacheRepository
 import com.sparjapati.dbStore.mysqlDbstore.service.MysqlDbStoreCacheService
+import com.sparjapati.dbStore.service.DbStoreCacheSupport
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
@@ -22,14 +25,25 @@ class DbStoreCachingConfiguration {
 
     @Bean
     fun dbStoreService(
-        repository: MysqlDbStoreCacheRepository
-    ): DbStoreService {
-        return MysqlDbStoreCacheService(repository)
+        repository: MysqlDbStoreCacheRepository,
+    ): DbStoreService = MysqlDbStoreCacheService(repository)
+
+    @Bean
+    fun dbStoreCacheSupport(dbStoreService: DbStoreService) = DbStoreCacheSupport(dbStoreService, objectMapper)
+
+    @Bean
+    fun dbStoreCacheableAspect(cacheSupport: DbStoreCacheSupport): DbStoreCacheableAspect {
+        return DbStoreCacheableAspect(cacheSupport)
     }
 
     @Bean
-    fun dbStoreAspect(dbStoreService: DbStoreService): DbStoreAspect {
-        return DbStoreAspect(dbStoreService, objectMapper)
+    fun dbStoreCacheEvictAspect(cacheSupport: DbStoreCacheSupport): DbStoreCacheEvictAspect {
+        return DbStoreCacheEvictAspect(cacheSupport)
+    }
+
+    @Bean
+    fun dbStoreCachePutAspect(cacheSupport: DbStoreCacheSupport): DbStoreCachePutAspect {
+        return DbStoreCachePutAspect(cacheSupport)
     }
 
 }

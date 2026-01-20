@@ -4,7 +4,6 @@ import com.sparjapati.service.EntityLookupRegistry
 import com.sparjapati.aspect.EntityValidationAspect
 import com.sparjapati.service.EntityLookupService
 import com.sparjapati.service.EntityValidationCache
-import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
