@@ -3,6 +3,7 @@ kotlin = "1.9.22"
 
 spring-framework-bom = "6.1.4"
 spring-data-bom = "2023.1.2"
+spring-boot = "3.2.2"
 
 jackson = "2.16.1"
 slf4j = "2.0.12"
@@ -26,6 +27,7 @@ jakarta-persistence = { module = "jakarta.persistence:jakarta.persistence-api", 
 aspectj-weaver = { module = "org.aspectj:aspectjweaver", version.ref = "aspectj" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot" }
 
 [bundles]
 spring-core = [

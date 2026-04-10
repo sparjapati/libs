@@ -16,6 +16,7 @@ dependencies {
 
     implementation(libs.jackson.databind)
     implementation(libs.slf4j.api)
+    compileOnly(libs.spring.boot.autoconfigure)
 }
 publishing {
     publications {

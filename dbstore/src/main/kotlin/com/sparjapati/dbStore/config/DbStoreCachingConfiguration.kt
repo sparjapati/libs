@@ -7,13 +7,16 @@ import com.sparjapati.dbStore.aspect.DbStoreCacheableAspect
 import com.sparjapati.dbStore.mysqlDbstore.repository.MysqlDbStoreCacheRepository
 import com.sparjapati.dbStore.mysqlDbstore.service.MysqlDbStoreCacheService
 import com.sparjapati.dbStore.service.DbStoreCacheSupport
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
+import com.sparjapati.dbStore.annotation.EnableDbStoreCaching
 import com.sparjapati.dbStore.service.DbStoreService
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 
 @Configuration
+@ConditionalOnBean(annotation = [EnableDbStoreCaching::class])
 @EnableAspectJAutoProxy(proxyTargetClass = true)
 @EnableJpaRepositories(
     basePackageClasses = [MysqlDbStoreCacheRepository::class]
