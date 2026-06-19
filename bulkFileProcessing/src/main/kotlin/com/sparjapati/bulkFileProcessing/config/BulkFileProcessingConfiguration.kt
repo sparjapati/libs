@@ -2,6 +2,7 @@ package com.sparjapati.bulkFileProcessing.config
 
 import com.sparjapati.bulkFileProcessing.batch.BatchJobService
 import com.sparjapati.bulkFileProcessing.batch.BulkJobCompletionHandlerRegistry
+import com.sparjapati.bulkFileProcessing.batch.BulkTempFileCleanupRunner
 import com.sparjapati.bulkFileProcessing.batch.FileProcessor
 import com.sparjapati.bulkFileProcessing.batch.FileProcessingJobFactory
 import com.sparjapati.bulkFileProcessing.batch.FileProcessorRegistry
@@ -35,6 +36,9 @@ class BulkFileProcessingConfiguration {
         transactionManager = transactionManager,
         handlerRegistry = handlerRegistry,
     )
+
+    @Bean
+    fun bulkTempFileCleanupRunner(): BulkTempFileCleanupRunner = BulkTempFileCleanupRunner()
 
     @Bean
     fun batchJobService(

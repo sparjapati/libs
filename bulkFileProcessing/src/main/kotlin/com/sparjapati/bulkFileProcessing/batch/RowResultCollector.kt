@@ -51,7 +51,7 @@ class RowResultCollector(private val fileType: String) {
 
     // Inline file: written during reading with all rows pre-stamped SUCCESS.
     // For CSV with no errors this IS the final result — no second pass needed.
-    private val inlineFile = Files.createTempFile("bulk-inline-", ".csv").toFile()
+    private val inlineFile = Files.createTempFile(BulkTempFileCleanupRunner.PREFIX_INLINE, ".csv").toFile()
     private val inlinePrinter = CSVFormat.DEFAULT.print(inlineFile.bufferedWriter())
 
     /**
@@ -105,7 +105,7 @@ class RowResultCollector(private val fileType: String) {
             return inlineFile.absolutePath
         }
 
-        val outputFile = Files.createTempFile("bulk-result-", ".$fileType").toFile()
+        val outputFile = Files.createTempFile(BulkTempFileCleanupRunner.PREFIX_RESULT, ".$fileType").toFile()
         when (fileType.lowercase()) {
             "xlsx" -> writeXlsx(outputFile)
             else   -> writeCsv(outputFile)
