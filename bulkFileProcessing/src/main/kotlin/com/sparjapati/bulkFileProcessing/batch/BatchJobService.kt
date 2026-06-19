@@ -2,7 +2,6 @@ package com.sparjapati.bulkFileProcessing.batch
 
 import com.sparjapati.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_JOB_ID
 import com.sparjapati.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_PROCESSOR_TYPE
-import com.sparjapati.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_USER_ID
 import com.sparjapati.bulkFileProcessing.dtos.BulkUploadResponse
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.job.parameters.JobParametersBuilder
@@ -41,14 +40,12 @@ class BatchJobService(
      *
      * @param file          the uploaded CSV or XLSX [MultipartFile].
      * @param processorType identifier that maps to a registered [FileProcessor].
-     * @param userId        ID of the user who triggered the upload (for notifications).
      * @return [BulkUploadResponse] containing the [jobId].
      * @throws IllegalArgumentException if [processorType] is not registered.
      */
     fun launch(
         file: MultipartFile,
         processorType: String,
-        userId: String,
     ): BulkUploadResponse {
         val processor = registry.get(processorType)
 
@@ -57,15 +54,13 @@ class BatchJobService(
             ?.lowercase()
             ?: "csv"
 
-        val tempFile = Files.createTempFile("bulk-$processorType-", ".$extension").toFile()
-        file.transferTo(tempFile)
-
         val jobId = UUID.randomUUID().toString()
+        val tempFile = Files.createTempFile("bulk-$processorType-$jobId", ".$extension").toFile()
+        file.transferTo(tempFile)
 
         val params = JobParametersBuilder()
             .addString(JOB_PARAM_JOB_ID, jobId)
             .addString(JOB_PARAM_PROCESSOR_TYPE, processorType)
-            .addString(JOB_PARAM_USER_ID, userId)
             .addString("filePath", tempFile.absolutePath)
             .addString("fileType", extension)
             .addLong("startedAt", System.currentTimeMillis())
@@ -80,10 +75,7 @@ class BatchJobService(
 
         executor.submit {
             try {
-                LOGGER.info(
-                    "Starting bulk job jobId={} processorType={} userId={}",
-                    jobId, processorType, userId,
-                )
+                LOGGER.info("Starting bulk job jobId={} processorType={}", jobId, processorType)
                 val jobInstance = jobRepository.createJobInstance(job.name, params)
                 val jobExecution = jobRepository.createJobExecution(jobInstance, params, ExecutionContext())
                 job.execute(jobExecution)

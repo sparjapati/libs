@@ -5,7 +5,6 @@ import com.sparjapati.bulkFileProcessing.batch.FileProcessor
 import com.sparjapati.bulkFileProcessing.batch.FileProcessingJobFactory
 import com.sparjapati.bulkFileProcessing.batch.FileProcessorRegistry
 import org.springframework.batch.core.repository.JobRepository
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.transaction.PlatformTransactionManager
@@ -24,11 +23,9 @@ class BulkFileProcessingConfiguration {
     fun fileProcessingJobFactory(
         jobRepository: JobRepository,
         transactionManager: PlatformTransactionManager,
-        eventPublisher: ApplicationEventPublisher,
     ): FileProcessingJobFactory = FileProcessingJobFactory(
         jobRepository = jobRepository,
         transactionManager = transactionManager,
-        eventPublisher = eventPublisher,
     )
 
     @Bean

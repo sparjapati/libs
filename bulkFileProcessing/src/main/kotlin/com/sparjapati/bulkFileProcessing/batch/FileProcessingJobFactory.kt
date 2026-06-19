@@ -8,7 +8,6 @@ import org.springframework.batch.core.listener.SkipListener
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.Step
 import org.springframework.batch.core.step.builder.StepBuilder
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.PlatformTransactionManager
 
 /**
@@ -28,12 +27,10 @@ import org.springframework.transaction.PlatformTransactionManager
  *
  * @param jobRepository      Spring Batch job repository (auto-configured by Spring Boot).
  * @param transactionManager transaction manager used for chunk-based step execution.
- * @param eventPublisher     Spring event publisher forwarded to [BatchJobCompletionListener].
  */
 class FileProcessingJobFactory(
     private val jobRepository: JobRepository,
     private val transactionManager: PlatformTransactionManager,
-    private val eventPublisher: ApplicationEventPublisher,
 ) {
 
     /**
@@ -58,7 +55,7 @@ class FileProcessingJobFactory(
         val typedProcessor = processor as FileProcessor<Any>
         val collector = RowResultCollector(fileType = fileType)
         val reader = SpreadsheetItemReader(filePath = filePath, fileType = fileType, collector = collector)
-        val jobListener = BatchJobCompletionListener(collector = collector, eventPublisher = eventPublisher)
+        val jobListener = BatchJobCompletionListener(collector = collector, processor = processor)
 
         val step: Step = StepBuilder("step-$jobId", jobRepository)
             .chunk<SpreadsheetRow, Any>(typedProcessor.chunkSize)

@@ -1,51 +1,59 @@
 package com.sparjapati.bulkFileProcessing.batch
 
-import com.sparjapati.bulkFileProcessing.events.BatchJobCompletedEvent
+import com.sparjapati.bulkFileProcessing.events.BulkJobCompletionHandler
+import com.sparjapati.bulkFileProcessing.events.BulkJobResult
+import org.slf4j.LoggerFactory
 import org.springframework.batch.core.job.JobExecution
 import org.springframework.batch.core.listener.JobExecutionListener
-import org.springframework.context.ApplicationEventPublisher
 
 /**
  * Fires after every bulk file processing job finishes, regardless of outcome.
  *
- * Writes the annotated result file via [RowResultCollector] (all rows with an extra
- * `error` column populated for skipped rows), then publishes a [BatchJobCompletedEvent]
- * so downstream consumers can notify users, upload files, etc.
+ * Writes the annotated result file via [RowResultCollector], then delegates to
+ * [BulkJobCompletionHandler.onJobCompleted] if the [processor] implements it.
  *
- * @param collector      the per-job [RowResultCollector] that accumulated rows and errors.
- * @param eventPublisher Spring's event publisher; used to fire [BatchJobCompletedEvent].
+ * @param collector the per-job [RowResultCollector] that accumulated rows and errors.
+ * @param processor the [FileProcessor] that handled this job; invoked as a
+ *   [BulkJobCompletionHandler] if it implements that interface.
  */
 class BatchJobCompletionListener(
     private val collector: RowResultCollector,
-    private val eventPublisher: ApplicationEventPublisher,
+    private val processor: FileProcessor<*>,
 ) : JobExecutionListener {
 
     companion object {
         const val JOB_PARAM_JOB_ID = "jobId"
-        const val JOB_PARAM_USER_ID = "userId"
         const val JOB_PARAM_PROCESSOR_TYPE = "processorType"
+        private val LOGGER = LoggerFactory.getLogger(BatchJobCompletionListener::class.java)
     }
 
     override fun afterJob(jobExecution: JobExecution) {
         val params = jobExecution.jobParameters
         val jobId = params.getString(JOB_PARAM_JOB_ID) ?: "unknown"
-        val userId = params.getString(JOB_PARAM_USER_ID) ?: "unknown"
         val processorType = params.getString(JOB_PARAM_PROCESSOR_TYPE) ?: "unknown"
         val writeCount = jobExecution.stepExecutions.sumOf { it.writeCount }
         val skipCount = jobExecution.stepExecutions.sumOf { it.skipCount }
 
         val resultFilePath = collector.writeResultFile()
 
-        eventPublisher.publishEvent(
-            BatchJobCompletedEvent(
+        if (processor is BulkJobCompletionHandler) {
+            val result = BulkJobResult(
                 jobId = jobId,
                 processorType = processorType,
-                userId = userId,
                 status = jobExecution.status,
                 writeCount = writeCount,
                 skipCount = skipCount,
                 resultFilePath = resultFilePath,
             )
-        )
+            try {
+                processor.onJobCompleted(result)
+            } catch (ex: Exception) {
+                LOGGER.error(
+                    "BulkJobCompletionHandler threw for processorType={} jobId={} — suppressed",
+                    processorType, jobId, ex,
+                )
+                throw ex;
+            }
+        }
     }
 }
