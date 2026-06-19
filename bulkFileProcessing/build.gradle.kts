@@ -6,6 +6,7 @@ plugins {
 }
 
 dependencies {
+    api(platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}"))
     api(libs.spring.boot.batch)
     api(libs.poi.ooxml)
     api(libs.commons.csv)
