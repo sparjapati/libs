@@ -9,7 +9,6 @@ import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.Step
 import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.context.ApplicationEventPublisher
-import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 
 /**
@@ -24,11 +23,13 @@ import org.springframework.transaction.PlatformTransactionManager
  * Each skipped row's error is recorded in [RowResultCollector] and written to the result
  * file by [BatchJobCompletionListener] after the job finishes.
  *
+ * Registered only when [@EnableBulkFileProcessing][com.sparjapati.bulkFileProcessing.config.EnableBulkFileProcessing]
+ * is present on a configuration class.
+ *
  * @param jobRepository      Spring Batch job repository (auto-configured by Spring Boot).
  * @param transactionManager transaction manager used for chunk-based step execution.
  * @param eventPublisher     Spring event publisher forwarded to [BatchJobCompletionListener].
  */
-@Component
 class FileProcessingJobFactory(
     private val jobRepository: JobRepository,
     private val transactionManager: PlatformTransactionManager,

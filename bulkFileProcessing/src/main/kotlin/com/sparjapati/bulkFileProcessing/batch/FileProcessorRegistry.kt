@@ -1,7 +1,6 @@
 package com.sparjapati.bulkFileProcessing.batch
 
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Component
 
 /**
  * Discovers all [FileProcessor] beans at startup and routes upload requests to the
@@ -11,9 +10,11 @@ import org.springframework.stereotype.Component
  * context into the [processors] list. Duplicate [FileProcessor.processorType] values
  * are rejected at startup with an [IllegalArgumentException].
  *
+ * Registered only when [@EnableBulkFileProcessing][com.sparjapati.bulkFileProcessing.config.EnableBulkFileProcessing]
+ * is present on a configuration class.
+ *
  * @param processors all registered [FileProcessor] implementations.
  */
-@Component
 class FileProcessorRegistry(processors: List<FileProcessor<*>>) {
 
     companion object {
