@@ -9,16 +9,17 @@ import org.springframework.batch.core.listener.JobExecutionListener
 /**
  * Fires after every bulk file processing job finishes, regardless of outcome.
  *
- * Writes the annotated result file via [RowResultCollector], then delegates to
- * [BulkJobCompletionHandler.onJobCompleted] if the [processor] implements it.
+ * Writes the annotated result file via [RowResultCollector], then calls
+ * [BulkJobCompletionHandler.onJobCompleted] if a handler was registered for this job's
+ * processor type. The handler is resolved once at job creation time by
+ * [FileProcessingJobFactory] and passed in directly — this listener has no registry dependency.
  *
  * @param collector the per-job [RowResultCollector] that accumulated rows and errors.
- * @param processor the [FileProcessor] that handled this job; invoked as a
- *   [BulkJobCompletionHandler] if it implements that interface.
+ * @param handler   the completion handler for this processor type, or `null` if none registered.
  */
 class BatchJobCompletionListener(
     private val collector: RowResultCollector,
-    private val processor: FileProcessor<*>,
+    private val handler: BulkJobCompletionHandler?,
 ) : JobExecutionListener {
 
     companion object {
@@ -36,24 +37,26 @@ class BatchJobCompletionListener(
 
         val resultFilePath = collector.writeResultFile()
 
-        if (processor is BulkJobCompletionHandler) {
-            val result = BulkJobResult(
-                jobId = jobId,
-                processorType = processorType,
-                status = jobExecution.status,
-                writeCount = writeCount,
-                skipCount = skipCount,
-                resultFilePath = resultFilePath,
+        if (handler == null) {
+            LOGGER.debug("No BulkJobCompletionHandler registered for processorType={} jobId={}", processorType, jobId)
+            return
+        }
+        val result = BulkJobResult(
+            jobId = jobId,
+            processorType = processorType,
+            status = jobExecution.status,
+            writeCount = writeCount,
+            skipCount = skipCount,
+            resultFilePath = resultFilePath,
+        )
+        try {
+            handler.onJobCompleted(result)
+        } catch (ex: Exception) {
+            LOGGER.error(
+                "BulkJobCompletionHandler threw for processorType={} jobId={} — suppressed",
+                processorType, jobId, ex,
             )
-            try {
-                processor.onJobCompleted(result)
-            } catch (ex: Exception) {
-                LOGGER.error(
-                    "BulkJobCompletionHandler threw for processorType={} jobId={} — suppressed",
-                    processorType, jobId, ex,
-                )
-                throw ex;
-            }
+            throw ex
         }
     }
 }

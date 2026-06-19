@@ -22,10 +22,7 @@ import org.springframework.batch.infrastructure.item.ItemWriter
  *
  * @param T the domain object produced by [rowReader] and consumed by [rowProcessor].
  */
-interface FileProcessor<T : Any> {
-
-    /** Unique identifier matched against the {@code processorType} request parameter. */
-    val processorType: String
+interface FileProcessor<T : Any> : HasProcessorType {
 
     /** Number of rows to read, process, and write per transaction chunk. Defaults to 100. */
     val chunkSize: Int get() = 100

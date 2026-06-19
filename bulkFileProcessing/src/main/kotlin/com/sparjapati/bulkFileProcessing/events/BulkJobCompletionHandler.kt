@@ -1,26 +1,32 @@
 package com.sparjapati.bulkFileProcessing.events
 
+import com.sparjapati.bulkFileProcessing.batch.HasProcessorType
+
 /**
- * Optional callback interface for [com.sparjapati.bulkFileProcessing.batch.FileProcessor]
- * implementations that need to react to their own job's completion.
+ * Callback interface for reacting to a bulk file processing job's completion.
  *
- * Implement this alongside [com.sparjapati.bulkFileProcessing.batch.FileProcessor] to receive
- * a [BulkJobResult] directly after your processor's job finishes:
+ * Register any number of implementations as `@Component` beans — the library
+ * discovers them at startup and routes each job's result to the handler whose
+ * [processorType] matches. There is at most one handler per processor type.
  *
  * ```kotlin
  * @Component
- * class InvoiceUploadProcessor : FileProcessor<Invoice>, BulkJobCompletionHandler {
+ * class InvoiceJobCompletionHandler : BulkJobCompletionHandler {
  *     override val processorType = "invoice-upload"
  *     override fun onJobCompleted(result: BulkJobResult) { ... }
  * }
  * ```
  *
- * **Thread safety:** the processor bean is a singleton; [onJobCompleted] may be called
+ * The handler does not have to be the same class as the
+ * [FileProcessor][com.sparjapati.bulkFileProcessing.batch.FileProcessor] — it can be
+ * any Spring bean that knows how to react to a specific processor type's completion.
+ *
+ * **Thread safety:** handler beans are singletons; [onJobCompleted] may be called
  * concurrently if multiple jobs of the same `processorType` run simultaneously.
  *
- * **Exceptions:** any [Exception] thrown is caught and logged — it does not affect
- * temp file cleanup or job status recording.
+ * **Exceptions:** any [Exception] thrown from [onJobCompleted] propagates to the
+ * calling thread after being logged — it does not affect temp file cleanup.
  */
-interface BulkJobCompletionHandler {
+interface BulkJobCompletionHandler : HasProcessorType {
     fun onJobCompleted(result: BulkJobResult)
 }

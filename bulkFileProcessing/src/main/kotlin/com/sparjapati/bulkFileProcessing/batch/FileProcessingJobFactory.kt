@@ -27,10 +27,12 @@ import org.springframework.transaction.PlatformTransactionManager
  *
  * @param jobRepository      Spring Batch job repository (auto-configured by Spring Boot).
  * @param transactionManager transaction manager used for chunk-based step execution.
+ * @param handlerRegistry    registry of completion handlers; looked up by processorType after each job.
  */
 class FileProcessingJobFactory(
     private val jobRepository: JobRepository,
     private val transactionManager: PlatformTransactionManager,
+    private val handlerRegistry: BulkJobCompletionHandlerRegistry,
 ) {
 
     /**
@@ -55,7 +57,10 @@ class FileProcessingJobFactory(
         val typedProcessor = processor as FileProcessor<Any>
         val collector = RowResultCollector(fileType = fileType)
         val reader = SpreadsheetItemReader(filePath = filePath, fileType = fileType, collector = collector)
-        val jobListener = BatchJobCompletionListener(collector = collector, processor = processor)
+        val jobListener = BatchJobCompletionListener(
+            collector = collector,
+            handler = handlerRegistry.find(processor.processorType),
+        )
 
         val step: Step = StepBuilder("step-$jobId", jobRepository)
             .chunk<SpreadsheetRow, Any>(typedProcessor.chunkSize)
