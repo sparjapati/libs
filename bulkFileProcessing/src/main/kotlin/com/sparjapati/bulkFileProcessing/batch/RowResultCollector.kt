@@ -3,6 +3,7 @@ package com.sparjapati.bulkFileProcessing.batch
 import org.apache.commons.csv.CSVFormat
 import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
 
@@ -11,19 +12,21 @@ import java.nio.file.Files
  * then writes an annotated result file where failed rows carry extra `status` and
  * `failure-reason` columns.
  *
- * **Large-file design**: rows are streamed to a temp CSV on disk as they arrive via
- * [recordRow] — the full dataset is never held in memory. Only error messages are
- * kept in memory (a [HashMap] of rowNumber → error), which is a small fraction of
- * total rows for typical uploads. The result file is produced with a single streaming
- * pass over the temp file.
+ * **Single-pass optimisation (CSV, no errors):** rows are written directly to the
+ * result file during reading, pre-stamped as SUCCESS. If no errors occur, that file
+ * is returned as-is — no second disk scan. Only when errors are present is a
+ * corrective second pass performed to rewrite the affected rows.
  *
- * For xlsx output [SXSSFWorkbook] is used so the workbook is also written in a
- * streaming fashion (default window: 100 rows in memory at a time).
+ * **XLSX output** always requires a second pass because [SXSSFWorkbook] is write-only
+ * (flushed rows cannot be read back). The inline CSV is used as the intermediate and
+ * converted to XLSX in [writeResultFile].
  *
- * One instance is created per job run and shared between the item reader
- * (which calls [recordRow] for each row it reads) and [RowSkipListener] (which
- * calls [recordError] for each row that fails processing or writing). Because
- * Spring Batch runs a single-threaded step by default, no synchronization is needed.
+ * **Memory:** only error messages are held in memory (`rowNumber → error`). Row numbers
+ * are kept as an ordered [Int] list (~4 bytes each) to map record position → row number
+ * during the corrective pass without embedding row numbers in the inline file.
+ *
+ * One instance is created per job run and shared between the item reader and
+ * [RowSkipListener]. No synchronisation is needed — Spring Batch steps are single-threaded.
  *
  * @param fileType output file format: `"csv"` (default) or `"xlsx"`.
  */
@@ -36,123 +39,139 @@ class RowResultCollector(private val fileType: String) {
         private const val STATUS_SUCCESS = "SUCCESS"
         private const val STATUS_FAILED = "FAILED"
         private const val STATUS_SUCCESS_DESC = "-"
-
-        /** Index of the synthetic row-number column prepended to every temp-file record. */
-        private const val ROW_NUMBER_COL = 0
     }
 
-    // Only errors are kept in memory — a small fraction of total rows
-    private val errors = HashMap<Int, String>() // rowNumber → error message
+    private val errors = HashMap<Int, String>()   // rowNumber → error message
     private var rowCount = 0
     private var headers: List<String>? = null
 
-    // Rows are streamed to disk immediately; the first column is the row number
-    // so it can be looked up during result-file annotation without re-parsing
-    // the source file.
-    private val rowTempFile = Files.createTempFile("bulk-rows-", ".csv").toFile()
-    private val rowPrinter = CSVFormat.DEFAULT.print(rowTempFile.bufferedWriter())
+    // Ordered row numbers — position i in this list corresponds to record i in the inline file.
+    // Avoids embedding row numbers as a synthetic column in the inline file.
+    private val rowNumbers = mutableListOf<Int>()
 
-    /** Streams [row] to the temp file. Captures column headers on the first call. */
+    // Inline file: written during reading with all rows pre-stamped SUCCESS.
+    // For CSV with no errors this IS the final result — no second pass needed.
+    private val inlineFile = Files.createTempFile("bulk-inline-", ".csv").toFile()
+    private val inlinePrinter = CSVFormat.DEFAULT.print(inlineFile.bufferedWriter())
+
+    /**
+     * Streams [row] to the inline file. Writes the header row on the first call.
+     * Pre-stamps each row as SUCCESS; errors are corrected in [writeResultFile] if needed.
+     */
     fun recordRow(row: SpreadsheetRow) {
         if (headers == null) {
             headers = row.values.keys.toList()
+            inlinePrinter.printRecord(headers!! + STATUS_COLUMN + FAILURE_REASON_COLUMN)
         }
-        rowPrinter.printRecord(buildList {
-            add(row.rowNumber)
+        rowNumbers.add(row.rowNumber)
+        inlinePrinter.printRecord(buildList {
             headers!!.forEach { add(row.values[it] ?: "") }
+            add(STATUS_SUCCESS)
+            add("")
         })
         rowCount++
     }
 
     /**
-     * Marks a previously recorded row as failed with [error].
-     * If no row with [rowNumber] was recorded (e.g. a read-phase failure), the call
-     * is a no-op — read errors are captured separately in the batch skip count.
+     * Marks row [rowNumber] as failed with [error].
+     * No-op if the row was never recorded (e.g. read-phase failure before [recordRow]).
      */
     fun recordError(rowNumber: Int, error: String) {
         errors[rowNumber] = error
     }
 
     /**
-     * Writes the annotated result file and returns its absolute path.
+     * Returns the path to the annotated result file.
      *
-     * The file contains all rows that were read, with two extra columns appended:
-     * - `status` — `"SUCCESS"` or `"FAILED"`
-     * - `failure-reason` — the exception message for skipped rows; `"-"` for successful rows.
+     * - **CSV, no errors** — returns the inline file directly (single pass total).
+     * - **CSV, errors present** — rewrites the inline file with corrected status/reason.
+     * - **XLSX** — converts the inline CSV to XLSX (always two passes; XLSX is write-only).
      *
-     * Rows are streamed from the temp file — the full dataset is never held in memory.
-     *
-     * @return absolute path of the written result file, or `null` if no rows were read.
+     * @return absolute path of the result file, or `null` if no rows were read.
      */
     fun writeResultFile(): String? {
-        rowPrinter.flush()
-        rowPrinter.close()
+        inlinePrinter.flush()
+        inlinePrinter.close()
 
         if (rowCount == 0) {
             LOGGER.info("No rows collected — skipping result file write")
-            if (!rowTempFile.delete()) LOGGER.warn("Failed to delete temp row file '{}'", rowTempFile.absolutePath)
+            inlineFile.deleteQuietly()
             return null
         }
 
-        val hdrs = headers!! // safe: rowCount > 0 implies at least one recordRow call
-        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN
-        val outputFile = Files.createTempFile("bulk-result-", ".$fileType").toFile()
-
-        when (fileType.lowercase()) {
-            "xlsx" -> writeXlsx(outputFile = outputFile, dataHeaders = hdrs, outputHeaders = outputHeaders)
-            else -> writeCsv(outputFile = outputFile, outputHeaders = outputHeaders, dataColumnCount = hdrs.size)
+        // Fast path: CSV with no errors — inline file is already the final result
+        if (errors.isEmpty() && fileType.lowercase() == "csv") {
+            LOGGER.info("Result file written inline ({} rows, 0 errors): {}", rowCount, inlineFile.absolutePath)
+            return inlineFile.absolutePath
         }
 
-        if (!rowTempFile.delete()) LOGGER.warn("Failed to delete temp row file '{}'", rowTempFile.absolutePath)
-        LOGGER.info("Result file written: {} ({} rows)", outputFile.absolutePath, rowCount)
+        val outputFile = Files.createTempFile("bulk-result-", ".$fileType").toFile()
+        when (fileType.lowercase()) {
+            "xlsx" -> writeXlsx(outputFile)
+            else   -> writeCsv(outputFile)
+        }
+
+        inlineFile.deleteQuietly()
+        LOGGER.info("Result file written ({} rows, {} errors): {}", rowCount, errors.size, outputFile.absolutePath)
         return outputFile.absolutePath
     }
 
-    private fun writeCsv(outputFile: java.io.File, outputHeaders: List<String>, dataColumnCount: Int) {
-        CSVFormat.DEFAULT
-            .builder()
+    // Corrective pass for CSV — re-reads inline file and fixes error rows.
+    private fun writeCsv(outputFile: File) {
+        val hdrs = headers!!
+        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN
+
+        CSVFormat.DEFAULT.builder()
             .setHeader(*outputHeaders.toTypedArray())
             .build()
             .print(outputFile.bufferedWriter())
             .use { printer ->
-                CSVFormat.DEFAULT.parse(rowTempFile.bufferedReader()).use { records ->
-                    for (record in records) {
-                        val rowNumber = record[ROW_NUMBER_COL].toInt()
-                        val error = errors[rowNumber]
-                        printer.printRecord(buildList {
-                            for (col in 1..dataColumnCount) add(record[col])
-                            add(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
-                            add(error ?: "")
-                        })
-                    }
+                inlineFile.forEachDataRecord { i, record ->
+                    val error = errors[rowNumbers[i]]
+                    printer.printRecord(buildList {
+                        repeat(hdrs.size) { col -> add(record[col]) }
+                        add(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
+                        add(error ?: "")
+                    })
                 }
             }
     }
 
-    private fun writeXlsx(outputFile: java.io.File, dataHeaders: List<String>, outputHeaders: List<String>) {
-        // SXSSFWorkbook keeps only `rowAccessWindowSize` rows in memory at a time,
-        // flushing older rows to a temp file — safe for arbitrarily large outputs.
+    // Converts inline CSV to XLSX — always a second pass (SXSSFWorkbook is write-only).
+    private fun writeXlsx(outputFile: File) {
+        val hdrs = headers!!
+        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN
+
         SXSSFWorkbook(/* rowAccessWindowSize = */ 100).use { wb ->
             val sheet = wb.createSheet("result")
-
             val headerRow = sheet.createRow(0)
             outputHeaders.forEachIndexed { col, header -> headerRow.createCell(col).setCellValue(header) }
 
-            CSVFormat.DEFAULT.parse(rowTempFile.bufferedReader()).use { records ->
-                var xlsxRowIdx = 1
-                for (record in records) {
-                    val rowNumber = record[ROW_NUMBER_COL].toInt()
-                    val error = errors[rowNumber]
-                    val xlsxRow = sheet.createRow(xlsxRowIdx++)
-                    for (col in 1..dataHeaders.size) {
-                        xlsxRow.createCell(col - 1).setCellValue(record[col])
-                    }
-                    xlsxRow.createCell(dataHeaders.size).setCellValue(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
-                    xlsxRow.createCell(dataHeaders.size + 1).setCellValue(error ?: STATUS_SUCCESS_DESC)
-                }
+            var xlsxRowIdx = 1
+            inlineFile.forEachDataRecord { i, record ->
+                val error = errors[rowNumbers[i]]
+                val xlsxRow = sheet.createRow(xlsxRowIdx++)
+                repeat(hdrs.size) { col -> xlsxRow.createCell(col).setCellValue(record[col]) }
+                xlsxRow.createCell(hdrs.size).setCellValue(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
+                xlsxRow.createCell(hdrs.size + 1).setCellValue(error ?: STATUS_SUCCESS_DESC)
             }
 
             FileOutputStream(outputFile).use { wb.write(it) }
         }
+    }
+
+    // Parses the inline CSV, skips the header row, and calls [block] for each data record
+    // with its 0-based index (aligned with [rowNumbers]).
+    private fun File.forEachDataRecord(block: (index: Int, record: org.apache.commons.csv.CSVRecord) -> Unit) {
+        CSVFormat.DEFAULT.parse(bufferedReader()).use { records ->
+            val iterator = records.iterator()
+            if (iterator.hasNext()) iterator.next() // skip header
+            var i = 0
+            while (iterator.hasNext()) block(i++, iterator.next())
+        }
+    }
+
+    private fun File.deleteQuietly() {
+        if (!delete()) LOGGER.warn("Failed to delete temp file '{}'", absolutePath)
     }
 }
