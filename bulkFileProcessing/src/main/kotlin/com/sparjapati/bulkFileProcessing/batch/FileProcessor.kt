@@ -27,6 +27,13 @@ interface FileProcessor<T : Any> : HasProcessorType {
     /** Number of rows to read, process, and write per transaction chunk. Defaults to 100. */
     val chunkSize: Int get() = 100
 
+    /**
+     * Maximum number of rows that may be skipped due to errors before the job is aborted.
+     * Defaults to [Long.MAX_VALUE] (unlimited — every bad row is skipped, job always completes).
+     * Override with a lower value to fail fast on high error rates.
+     */
+    val skipLimit: Long get() = Long.MAX_VALUE
+
     /** Returns the [ItemProcessor] that transforms a raw [SpreadsheetRow] into [T]. */
     fun rowReader(): ItemProcessor<SpreadsheetRow, T>
 

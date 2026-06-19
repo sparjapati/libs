@@ -18,7 +18,7 @@ import org.springframework.transaction.PlatformTransactionManager
  * of the same [FileProcessor.processorType] run as independent jobs without conflicting
  * in the [JobRepository].
  *
- * The step is configured with unlimited skip so individual row errors do not abort the job.
+ * The step is configured with a skip limit from [FileProcessor.skipLimit] (default: unlimited).
  * Each skipped row's error is recorded in [RowResultCollector] and written to the result
  * file by [BatchJobCompletionListener] after the job finishes.
  *
@@ -70,7 +70,7 @@ class FileProcessingJobFactory(
             .writer(typedProcessor.rowProcessor())
             .faultTolerant()
             .skip(Exception::class.java)
-            .skipLimit(Long.MAX_VALUE)
+            .skipLimit(typedProcessor.skipLimit)
             .skipListener(RowSkipListener(jobId = jobId, collector = collector))
             .build()
 
