@@ -11,6 +11,7 @@ dependencies {
     api(libs.poi.ooxml)
     api(libs.commons.csv)
     compileOnly(libs.spring.boot.autoconfigure)
+    compileOnly("org.springframework:spring-web")
     implementation(libs.slf4j.api)
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")

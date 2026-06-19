@@ -4,31 +4,27 @@ import com.sparjapati.bulkFileProcessing.batch.BatchJobCompletionListener.Compan
 import com.sparjapati.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_PROCESSOR_TYPE
 import com.sparjapati.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_USER_ID
 import com.sparjapati.bulkFileProcessing.dtos.BulkUploadResponse
-import com.sparjapati.aaiseHi.utils.request.async.ContextExecutors
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.job.parameters.JobParametersBuilder
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.infrastructure.item.ExecutionContext
-import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import java.nio.file.Files
 import java.util.UUID
+import java.util.concurrent.Executors
 
 /**
  * Orchestrates bulk file processing: saves the uploaded file to a temp location,
  * builds the Spring Batch [Job] via [FileProcessingJobFactory], submits it to a
- * background thread via [ContextExecutors], and returns immediately with a [jobId].
+ * background thread pool, and returns immediately with a [jobId].
  *
  * The temp file is deleted in a `finally` block after the job finishes (or fails),
- * not via [com.sparjapati.aaiseHi.utils.request.filter.RequestFilesRegistry], which
- * runs when the HTTP request ends — before the async job completes.
+ * so it is not left around after the HTTP request completes.
  *
  * Uses [JobRepository.createJobExecution] + [org.springframework.batch.core.job.Job.execute]
  * directly instead of the deprecated [org.springframework.batch.core.launch.JobLauncher] API
- * (deprecated in Spring Batch 6.0). Thread management is handled by [ContextExecutors.single],
- * so no `TaskExecutor` wiring is needed.
+ * (deprecated in Spring Batch 6.0).
  */
-@Service
 class BatchJobService(
     private val jobRepository: JobRepository,
     private val jobFactory: FileProcessingJobFactory,
@@ -36,7 +32,7 @@ class BatchJobService(
 ) {
     companion object {
         private val LOGGER = LoggerFactory.getLogger(BatchJobService::class.java)
-        private val executor = ContextExecutors.fixedPool(size = 10)
+        private val executor = Executors.newFixedThreadPool(10)
     }
 
     /**
