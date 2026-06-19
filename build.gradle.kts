@@ -1,7 +1,7 @@
 plugins {
-    kotlin("jvm") version "1.9.22" apply false
-    kotlin("plugin.spring") version "1.9.22" apply false
-    kotlin("plugin.jpa") version "1.9.22" apply false
+    kotlin("jvm") version "2.2.21" apply false
+    kotlin("plugin.spring") version "2.2.21" apply false
+    kotlin("plugin.jpa") version "2.2.21" apply false
 }
 subprojects {
     group = property("group") as String
@@ -15,4 +15,7 @@ project(":dbstore") {
 }
 project(":entityLookup") {
     version = property("entityLookupVersion") as String
+}
+project(":bulkFileProcessing") {
+    version = property("bulkFileProcessingVersion") as String
 }
