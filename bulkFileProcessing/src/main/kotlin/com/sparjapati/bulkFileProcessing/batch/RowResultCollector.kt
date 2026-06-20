@@ -6,16 +6,20 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.time.LocalDate
 
 /**
  * Collects every row read during a batch job and any per-row processing errors,
  * then writes an annotated result file where failed rows carry extra `status` and
  * `failure-reason` columns.
  *
- * **Single-pass optimisation (CSV, no errors):** rows are written directly to the
- * result file during reading, pre-stamped as SUCCESS. If no errors occur, that file
- * is returned as-is — no second disk scan. Only when errors are present is a
- * corrective second pass performed to rewrite the affected rows.
+ * **Result file location:** `{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}`
+ *
+ * **Single-pass optimisation (CSV, no errors):** rows are written directly to an inline temp CSV
+ * during reading, pre-stamped as SUCCESS. If no errors occur, that file is moved to the structured
+ * result path — no second disk scan. Only when errors are present is a corrective second pass
+ * performed to rewrite the affected rows.
  *
  * **XLSX output** always requires a second pass because [SXSSFWorkbook] is write-only
  * (flushed rows cannot be read back). The inline CSV is used as the intermediate and
@@ -28,9 +32,19 @@ import java.nio.file.Files
  * One instance is created per job run and shared between the item reader and
  * [RowSkipListener]. No synchronisation is needed — Spring Batch steps are single-threaded.
  *
- * @param fileType output file format: `"csv"` (default) or `"xlsx"`.
+ * @param fileType         output file format: `"csv"` or `"xlsx"`.
+ * @param processorType    the processor type string — forms the first level of the result directory.
+ * @param originalFileName the original uploaded file name supplied by the caller — used to name
+ *                         the result file as `result-{baseName}.{ext}`. Special characters are
+ *                         sanitised to keep the filename safe.
+ * @param resultBaseDir    root directory under which `{processorType}/{date}/` is created.
  */
-class RowResultCollector(private val fileType: String) {
+class RowResultCollector(
+    private val fileType: String,
+    private val processorType: String,
+    private val originalFileName: String,
+    private val resultBaseDir: File,
+) {
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger(RowResultCollector::class.java)
@@ -50,7 +64,7 @@ class RowResultCollector(private val fileType: String) {
     private val rowNumbers = mutableListOf<Int>()
 
     // Inline file: written during reading with all rows pre-stamped SUCCESS.
-    // For CSV with no errors this IS the final result — no second pass needed.
+    // For CSV with no errors this is moved to the result location — no second pass needed.
     private val inlineFile = Files.createTempFile(BulkTempFileCleanupRunner.PREFIX_INLINE, ".csv").toFile()
     private val inlinePrinter = CSVFormat.DEFAULT.print(inlineFile.bufferedWriter())
 
@@ -81,11 +95,12 @@ class RowResultCollector(private val fileType: String) {
     }
 
     /**
-     * Returns the path to the annotated result file.
+     * Returns the path to the annotated result file written under
+     * `{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}`.
      *
-     * - **CSV, no errors** — returns the inline file directly (single pass total).
-     * - **CSV, errors present** — rewrites the inline file with corrected status/reason.
-     * - **XLSX** — converts the inline CSV to XLSX (always two passes; XLSX is write-only).
+     * - **CSV, no errors** — moves the inline file to the result location (single pass total).
+     * - **CSV, errors present** — re-reads the inline file, writes corrected output to result location.
+     * - **XLSX** — converts inline CSV → XLSX via [SXSSFWorkbook] (always two passes; XLSX is write-only).
      *
      * @return absolute path of the result file, or `null` if no rows were read.
      */
@@ -99,13 +114,15 @@ class RowResultCollector(private val fileType: String) {
             return null
         }
 
-        // Fast path: CSV with no errors — inline file is already the final result
+        val outputFile = resolveResultFile()
+
+        // Fast path: CSV with no errors — move inline file directly to the result location
         if (errors.isEmpty() && fileType.lowercase() == "csv") {
-            LOGGER.info("Result file written inline ({} rows, 0 errors): {}", rowCount, inlineFile.absolutePath)
-            return inlineFile.absolutePath
+            Files.move(inlineFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            LOGGER.info("Result file written inline ({} rows, 0 errors): {}", rowCount, outputFile.absolutePath)
+            return outputFile.absolutePath
         }
 
-        val outputFile = Files.createTempFile(BulkTempFileCleanupRunner.PREFIX_RESULT, ".$fileType").toFile()
         when (fileType.lowercase()) {
             "xlsx" -> writeXlsx(outputFile)
             else   -> writeCsv(outputFile)
@@ -114,6 +131,22 @@ class RowResultCollector(private val fileType: String) {
         inlineFile.deleteQuietly()
         LOGGER.info("Result file written ({} rows, {} errors): {}", rowCount, errors.size, outputFile.absolutePath)
         return outputFile.absolutePath
+    }
+
+    /**
+     * Resolves the structured result file path:
+     * `{resultBaseDir}/{processorType}/{YYYY-MM-dd}/result-{sanitizedBaseName}.{fileType}`
+     * and creates the directory if it does not exist.
+     */
+    private fun resolveResultFile(): File {
+        val date = LocalDate.now().toString()
+        val sanitizedBase = originalFileName
+            .substringBeforeLast('.')
+            .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            .take(100)
+        val dir = File(resultBaseDir, "$processorType/$date")
+        dir.mkdirs()
+        return File(dir, "result-$sanitizedBase.$fileType")
     }
 
     // Corrective pass for CSV — re-reads inline file and fixes error rows.

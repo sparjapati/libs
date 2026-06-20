@@ -2,6 +2,7 @@ package com.sparjapati.bulkFileProcessing.batch
 
 import com.sparjapati.bulkFileProcessing.batch.reader.SpreadsheetItemReader
 import org.slf4j.LoggerFactory
+import java.io.File
 import org.springframework.batch.core.job.Job
 import org.springframework.batch.core.job.builder.JobBuilder
 import org.springframework.batch.core.listener.SkipListener
@@ -33,6 +34,7 @@ class FileProcessingJobFactory(
     private val jobRepository: JobRepository,
     private val transactionManager: PlatformTransactionManager,
     private val handlerRegistry: BulkJobCompletionHandlerRegistry,
+    private val resultBaseDir: File,
 ) {
 
     /**
@@ -42,10 +44,11 @@ class FileProcessingJobFactory(
      * runtime because generic type parameters are erased by the JVM; the cast only
      * satisfies the Kotlin compiler so the [StepBuilder] chunk types align.
      *
-     * @param processor  the domain-specific processor to use.
-     * @param jobId      unique identifier for this run — used to name the Job and Step.
-     * @param filePath   absolute path to the uploaded temp file.
-     * @param fileType   "csv" or "xlsx".
+     * @param processor        the domain-specific processor to use.
+     * @param jobId            unique identifier for this run — used to name the Job and Step.
+     * @param filePath         absolute path to the uploaded temp file.
+     * @param fileType         "csv" or "xlsx".
+     * @param originalFileName the original uploaded filename; used to name the result file.
      */
     @Suppress("UNCHECKED_CAST")
     fun create(
@@ -53,9 +56,15 @@ class FileProcessingJobFactory(
         jobId: String,
         filePath: String,
         fileType: String,
+        originalFileName: String,
     ): Job {
         val typedProcessor = processor as FileProcessor<Any>
-        val collector = RowResultCollector(fileType = fileType)
+        val collector = RowResultCollector(
+            fileType = fileType,
+            processorType = processor.processorType,
+            originalFileName = originalFileName,
+            resultBaseDir = resultBaseDir,
+        )
         val reader = SpreadsheetItemReader(filePath = filePath, fileType = fileType, collector = collector)
         val jobListener = BatchJobCompletionListener(
             collector = collector,

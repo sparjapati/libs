@@ -29,10 +29,8 @@ class BulkTempFileCleanupRunner(
     companion object {
         private val LOGGER = LoggerFactory.getLogger(BulkTempFileCleanupRunner::class.java)
 
+        /** Prefix used by [RowResultCollector] for inline working files in the system temp directory. */
         const val PREFIX_INLINE = "bulk-inline-"
-        const val PREFIX_RESULT = "bulk-result-"
-
-        private val TEMP_FILE_PREFIXES = listOf(PREFIX_INLINE, PREFIX_RESULT)
     }
 
     override fun run(args: ApplicationArguments) {
@@ -40,7 +38,7 @@ class BulkTempFileCleanupRunner(
         val cutoff = Instant.now().minus(staleAfter)
 
         val stale = tempDir.listFiles { file ->
-            TEMP_FILE_PREFIXES.any { file.name.startsWith(it) } &&
+            file.name.startsWith(PREFIX_INLINE) &&
                 file.lastModified() < cutoff.toEpochMilli()
         } ?: return
 

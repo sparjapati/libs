@@ -52,16 +52,18 @@ class BatchJobService(
      * Must be called from a background thread — this method blocks until the job completes.
      * Use [jobId] to correlate logs with the response returned to the HTTP caller.
      *
-     * @param sourceFile    pre-written file on disk containing the CSV or XLSX content.
-     * @param processorType identifier that maps to a registered [FileProcessor].
-     * @param jobId         caller-supplied identifier so the response can be built before this
-     *                      method is dispatched to a background thread.
-     * @throws IllegalArgumentException if [processorType] is not registered.
+     * @param sourceFile       pre-written file on disk containing the CSV or XLSX content.
+     * @param processorType    identifier that maps to a registered [FileProcessor].
+     * @param jobId            caller-supplied identifier so the response can be built before this
+     *                         method is dispatched to a background thread.
+     * @param originalFileName the original uploaded filename (e.g. from [MultipartFile.originalFilename]);
+     *                         used to name the result file. Defaults to the source file's own name.
      */
     fun launch(
         sourceFile: File,
         processorType: String,
         jobId: String,
+        originalFileName: String = sourceFile.name,
     ) {
         val processor = registry.find(processorType)
         if (processor == null) {
@@ -86,6 +88,7 @@ class BatchJobService(
             jobId = jobId,
             filePath = sourceFile.absolutePath,
             fileType = extension,
+            originalFileName = originalFileName,
         )
 
         LOGGER.info("Starting bulk job jobId={} processorType={}", jobId, processorType)
