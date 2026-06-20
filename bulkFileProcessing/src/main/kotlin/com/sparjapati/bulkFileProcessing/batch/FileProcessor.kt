@@ -28,11 +28,16 @@ package com.sparjapati.bulkFileProcessing.batch
  *         }
  *     }
  *
+ *     // Declare column order explicitly (optional but recommended)
+ *     override val extraColumns = listOf("invoice_id", "status_code")
+ *
  *     override fun rowProcessor() = { results: Map<SpreadsheetRow, Invoice> ->
- *         val saved = repo.saveAll(results.values.toList()).associateBy { it.sourceRowId }
- *         results.keys.associateWith { row ->
- *             if (saved.containsKey(row.rowNumber)) RowResult.success(Unit)
- *             else RowResult.failure("save failed")
+ *         val saved = repo.saveAll(results.values.toList())
+ *         results.keys.zip(saved).associate { (row, invoice) ->
+ *             row to RowResult.success(mapOf(
+ *                 "invoice_id"  to invoice.id,
+ *                 "status_code" to invoice.statusCode,
+ *             ))
  *         }
  *     }
  * }
@@ -69,12 +74,26 @@ interface FileProcessor<T : Any> : HasProcessorType {
      * Returns a function that persists the transformed chunk.
      * Receives the [Map] of successfully transformed rows from [rowReader].
      *
-     * Return [RowResult.Success] for each row that was persisted, [RowResult.Failure] for
-     * expected per-row errors (duplicate key, constraint violation, etc.) — the library
-     * records failures in the result file without throwing.
+     * Return [RowResult.Success] with an [ExtraColumns] map for each persisted row — the library
+     * appends those key-value pairs as extra columns in the result file (e.g. `"account_id" to user.id`).
+     * Return an empty map when no extra columns are needed for a row.
+     *
+     * Return [RowResult.Failure] for expected per-row errors (duplicate key, constraint violation,
+     * etc.) — the library records the error in the result file without throwing.
      *
      * Unexpected system errors (DB unavailable, etc.) should still be thrown as exceptions
      * so Spring Batch's fault-tolerance and skip mechanism handles them.
+     *
+     * **Column order:** extra column headers are discovered from the first non-empty [ExtraColumns]
+     * map returned. Use a consistent key order (e.g. `linkedMapOf`) across all rows, or declare
+     * the order explicitly via [extraColumns].
      */
-    fun rowProcessor(): (Map<SpreadsheetRow, T>) -> Map<SpreadsheetRow, RowResult<Unit>>
+    fun rowProcessor(): (Map<SpreadsheetRow, T>) -> Map<SpreadsheetRow, RowResult<ExtraColumns>>
+
+    /**
+     * Declares the names and order of extra columns added by [rowProcessor].
+     * Override this to guarantee column order regardless of which chunk is processed first.
+     * Defaults to empty (order discovered from the first non-empty result).
+     */
+    val extraColumns: List<String> get() = emptyList()
 }

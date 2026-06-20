@@ -10,40 +10,39 @@ import java.nio.file.StandardCopyOption
 import java.time.LocalDate
 
 /**
- * Collects every row read during a batch job and any per-row processing errors,
- * then writes an annotated result file where failed rows carry extra `status` and
- * `failure-reason` columns.
+ * Collects every row read during a batch job, any per-row processing errors, and any extra
+ * columns contributed by [FileProcessor.rowProcessor], then writes an annotated result file.
  *
  * **Result file location:** `{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}`
  *
- * **Single-pass optimisation (CSV, no errors):** rows are written directly to an inline temp CSV
- * during reading, pre-stamped as SUCCESS. If no errors occur, that file is moved to the structured
- * result path — no second disk scan. Only when errors are present is a corrective second pass
- * performed to rewrite the affected rows.
+ * **Single-pass optimisation (CSV, no errors, no extra columns):** rows are written directly to
+ * an inline temp CSV during reading, pre-stamped as SUCCESS. If no errors or extra columns occur,
+ * that file is moved to the structured result path — no second disk scan.
  *
- * **XLSX output** always requires a second pass because [SXSSFWorkbook] is write-only
- * (flushed rows cannot be read back). The inline CSV is used as the intermediate and
- * converted to XLSX in [writeResultFile].
+ * **Extra columns:** [FileProcessor.rowProcessor] can return per-row key-value pairs (e.g.
+ * `"account_id" to "ACC-123"`) via [RowResult.Success]. These are collected in [rowExtras]
+ * and appended as additional columns after `failure-reason` in the result file.
+ * Column names are taken from [FileProcessor.extraColumns] if declared, otherwise discovered
+ * from the first non-empty extras map returned during the job.
  *
- * **Memory:** only error messages are held in memory (`rowNumber → error`). Row numbers
- * are kept as an ordered [Int] list (~4 bytes each) to map record position → row number
- * during the corrective pass without embedding row numbers in the inline file.
+ * **XLSX output** always requires a second pass because [SXSSFWorkbook] is write-only.
  *
- * One instance is created per job run and shared between the item reader and
- * [RowSkipListener]. No synchronisation is needed — Spring Batch steps are single-threaded.
+ * **Memory:** error messages and extra column values are held in memory (one map entry per row).
+ * Row content itself is always on disk.
  *
  * @param fileType         output file format: `"csv"` or `"xlsx"`.
- * @param processorType    the processor type string — forms the first level of the result directory.
- * @param originalFileName the original uploaded file name supplied by the caller — used to name
- *                         the result file as `result-{baseName}.{ext}`. Special characters are
- *                         sanitised to keep the filename safe.
+ * @param processorType    forms the first level of the result directory.
+ * @param originalFileName original uploaded filename; used to name the result file.
  * @param resultBaseDir    root directory under which `{processorType}/{date}/` is created.
+ * @param declaredExtraColumns column names and order declared by [FileProcessor.extraColumns];
+ *   empty list means discover from first non-empty extras map.
  */
 class RowResultCollector(
     private val fileType: String,
     private val processorType: String,
     private val originalFileName: String,
     private val resultBaseDir: File,
+    private val declaredExtraColumns: List<String> = emptyList(),
 ) {
 
     companion object {
@@ -55,18 +54,23 @@ class RowResultCollector(
         private const val STATUS_SUCCESS_DESC = "-"
     }
 
-    private val errors = HashMap<Int, String>()   // rowNumber → error message
+    private val errors = HashMap<Int, String>()        // rowNumber → error message
+    private val rowExtras = HashMap<Int, ExtraColumns>() // rowNumber → extra column values
+    private var discoveredExtraColumns: List<String> = emptyList()
+
     private var rowCount = 0
     private var headers: List<String>? = null
 
     // Ordered row numbers — position i in this list corresponds to record i in the inline file.
-    // Avoids embedding row numbers as a synthetic column in the inline file.
     private val rowNumbers = mutableListOf<Int>()
 
     // Inline file: written during reading with all rows pre-stamped SUCCESS.
-    // For CSV with no errors this is moved to the result location — no second pass needed.
     private val inlineFile = Files.createTempFile(BulkTempFileCleanupRunner.PREFIX_INLINE, ".csv").toFile()
     private val inlinePrinter = CSVFormat.DEFAULT.print(inlineFile.bufferedWriter())
+
+    /** The active extra column names: declared list if set, otherwise discovered at runtime. */
+    private val extraColumnNames: List<String>
+        get() = declaredExtraColumns.ifEmpty { discoveredExtraColumns }
 
     /**
      * Streams [row] to the inline file. Writes the header row on the first call.
@@ -88,19 +92,31 @@ class RowResultCollector(
 
     /**
      * Marks row [rowNumber] as failed with [error].
-     * No-op if the row was never recorded (e.g. read-phase failure before [recordRow]).
      */
     fun recordError(rowNumber: Int, error: String) {
         errors[rowNumber] = error
     }
 
     /**
-     * Returns the path to the annotated result file written under
-     * `{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}`.
+     * Records extra columns for row [rowNumber] returned by [FileProcessor.rowProcessor].
+     * Ignored if [extra] is empty. On the first non-empty call, discovers column names
+     * from the map's keys (preserving insertion order) unless already declared via
+     * [FileProcessor.extraColumns].
+     */
+    fun recordExtra(rowNumber: Int, extra: ExtraColumns) {
+        if (extra.isEmpty()) return
+        rowExtras[rowNumber] = extra
+        if (discoveredExtraColumns.isEmpty()) {
+            discoveredExtraColumns = extra.keys.toList()
+        }
+    }
+
+    /**
+     * Returns the path to the annotated result file.
      *
-     * - **CSV, no errors** — moves the inline file to the result location (single pass total).
-     * - **CSV, errors present** — re-reads the inline file, writes corrected output to result location.
-     * - **XLSX** — converts inline CSV → XLSX via [SXSSFWorkbook] (always two passes; XLSX is write-only).
+     * - **CSV, no errors, no extras** — moves the inline file to the result location (1 pass).
+     * - **CSV, errors or extras present** — re-reads inline, writes corrected output.
+     * - **XLSX** — converts inline CSV → XLSX (always two passes; XLSX is write-only).
      *
      * @return absolute path of the result file, or `null` if no rows were read.
      */
@@ -116,8 +132,8 @@ class RowResultCollector(
 
         val outputFile = resolveResultFile()
 
-        // Fast path: CSV with no errors — move inline file directly to the result location
-        if (errors.isEmpty() && fileType.lowercase() == "csv") {
+        // Fast path: CSV with no errors and no extra columns — move inline file as-is
+        if (errors.isEmpty() && rowExtras.isEmpty() && fileType.lowercase() == "csv") {
             Files.move(inlineFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
             LOGGER.info("Result file written inline ({} rows, 0 errors): {}", rowCount, outputFile.absolutePath)
             return outputFile.absolutePath
@@ -129,15 +145,13 @@ class RowResultCollector(
         }
 
         inlineFile.deleteQuietly()
-        LOGGER.info("Result file written ({} rows, {} errors): {}", rowCount, errors.size, outputFile.absolutePath)
+        LOGGER.info(
+            "Result file written ({} rows, {} errors, {} with extras): {}",
+            rowCount, errors.size, rowExtras.size, outputFile.absolutePath,
+        )
         return outputFile.absolutePath
     }
 
-    /**
-     * Resolves the structured result file path:
-     * `{resultBaseDir}/{processorType}/{YYYY-MM-dd}/result-{sanitizedBaseName}.{fileType}`
-     * and creates the directory if it does not exist.
-     */
     private fun resolveResultFile(): File {
         val date = LocalDate.now().toString()
         val sanitizedBase = originalFileName
@@ -149,10 +163,10 @@ class RowResultCollector(
         return File(dir, "result-$sanitizedBase.$fileType")
     }
 
-    // Corrective pass for CSV — re-reads inline file and fixes error rows.
     private fun writeCsv(outputFile: File) {
         val hdrs = headers!!
-        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN
+        val extraCols = extraColumnNames
+        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN + extraCols
 
         CSVFormat.DEFAULT.builder()
             .setHeader(*outputHeaders.toTypedArray())
@@ -160,20 +174,23 @@ class RowResultCollector(
             .print(outputFile.bufferedWriter())
             .use { printer ->
                 inlineFile.forEachDataRecord { i, record ->
-                    val error = errors[rowNumbers[i]]
+                    val rowNumber = rowNumbers[i]
+                    val error = errors[rowNumber]
+                    val extras = rowExtras[rowNumber] ?: emptyMap()
                     printer.printRecord(buildList {
                         repeat(hdrs.size) { col -> add(record[col]) }
                         add(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
                         add(error ?: "")
+                        extraCols.forEach { add(extras[it] ?: "") }
                     })
                 }
             }
     }
 
-    // Converts inline CSV to XLSX — always a second pass (SXSSFWorkbook is write-only).
     private fun writeXlsx(outputFile: File) {
         val hdrs = headers!!
-        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN
+        val extraCols = extraColumnNames
+        val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN + extraCols
 
         SXSSFWorkbook(/* rowAccessWindowSize = */ 100).use { wb ->
             val sheet = wb.createSheet("result")
@@ -182,19 +199,22 @@ class RowResultCollector(
 
             var xlsxRowIdx = 1
             inlineFile.forEachDataRecord { i, record ->
-                val error = errors[rowNumbers[i]]
+                val rowNumber = rowNumbers[i]
+                val error = errors[rowNumber]
+                val extras = rowExtras[rowNumber] ?: emptyMap()
                 val xlsxRow = sheet.createRow(xlsxRowIdx++)
                 repeat(hdrs.size) { col -> xlsxRow.createCell(col).setCellValue(record[col]) }
                 xlsxRow.createCell(hdrs.size).setCellValue(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
                 xlsxRow.createCell(hdrs.size + 1).setCellValue(error ?: STATUS_SUCCESS_DESC)
+                extraCols.forEachIndexed { i2, key ->
+                    xlsxRow.createCell(hdrs.size + 2 + i2).setCellValue(extras[key] ?: "")
+                }
             }
 
             FileOutputStream(outputFile).use { wb.write(it) }
         }
     }
 
-    // Parses the inline CSV, skips the header row, and calls [block] for each data record
-    // with its 0-based index (aligned with [rowNumbers]).
     private fun File.forEachDataRecord(block: (index: Int, record: org.apache.commons.csv.CSVRecord) -> Unit) {
         CSVFormat.DEFAULT.parse(bufferedReader()).use { records ->
             val iterator = records.iterator()

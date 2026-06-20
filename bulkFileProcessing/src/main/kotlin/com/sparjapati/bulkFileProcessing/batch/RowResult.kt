@@ -1,6 +1,13 @@
 package com.sparjapati.bulkFileProcessing.batch
 
 /**
+ * Extra columns appended to a result row by [FileProcessor.rowProcessor].
+ * Keys become column headers; values are written into the corresponding cells.
+ * An empty map means no extra columns for that row.
+ */
+typealias ExtraColumns = Map<String, String>
+
+/**
  * Represents the outcome of transforming a single [SpreadsheetRow] in [FileProcessor.rowReader].
  *
  * Return [Success] when the row maps cleanly to a domain object.

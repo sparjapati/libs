@@ -64,6 +64,7 @@ class FileProcessingJobFactory(
             processorType = processor.processorType,
             originalFileName = originalFileName,
             resultBaseDir = resultBaseDir,
+            declaredExtraColumns = processor.extraColumns,
         )
         val reader = SpreadsheetItemReader(filePath = filePath, fileType = fileType, collector = collector)
         val jobListener = BatchJobCompletionListener(
@@ -94,8 +95,9 @@ class FileProcessingJobFactory(
                 if (successMap.isNotEmpty()) {
                     val processorResults = rowProcessor(successMap)
                     for ((row, result) in processorResults) {
-                        if (result is RowResult.Failure) {
-                            collector.recordError(rowNumber = row.rowNumber, error = result.error)
+                        when (result) {
+                            is RowResult.Success -> collector.recordExtra(rowNumber = row.rowNumber, extra = result.value)
+                            is RowResult.Failure -> collector.recordError(rowNumber = row.rowNumber, error = result.error)
                         }
                     }
                 }
