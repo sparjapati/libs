@@ -1,22 +1,24 @@
 # Bulk File Processing
 
-A Spring Boot library for processing large CSV and XLSX uploads asynchronously using Spring Batch. Upload a file, get back a `jobId` immediately, and receive results when the job finishes — without blocking the HTTP request or holding the file in memory.
+A Spring Boot library for processing large CSV and XLSX uploads asynchronously using Spring Batch. Upload a file, get back a `jobId` immediately, and receive a per-row annotated result file when the job finishes — without blocking the HTTP request or holding the file in memory.
 
 ---
 
 ## Table of Contents
 
 - [How It Works](#how-it-works)
+- [Data Flow](#data-flow)
 - [Setup](#setup)
 - [Implementing a Processor](#implementing-a-processor)
 - [Handling Job Completion](#handling-job-completion)
 - [Triggering an Upload](#triggering-an-upload)
 - [Result File](#result-file)
+- [RowResult — Returning Errors Without Throwing](#rowresult--returning-errors-without-throwing)
 - [Internals](#internals)
-  - [Request Flow](#request-flow)
   - [File Reading](#file-reading)
-  - [Spring Batch Job Structure](#spring-batch-job-structure)
-  - [Error Collection](#error-collection)
+  - [Chunk Processing](#chunk-processing)
+  - [Error Collection and Result File](#error-collection-and-result-file)
+  - [Startup Cleanup](#startup-cleanup)
   - [Thread Model](#thread-model)
 
 ---
@@ -26,33 +28,165 @@ A Spring Boot library for processing large CSV and XLSX uploads asynchronously u
 ```
 HTTP thread
     │
-    ├─ jobId = UUID.randomUUID().toString()
-    ├─ executor.submit { batchJobService.launch(file, processorType, jobId) }
-    └─ return jobId          ← caller unblocked immediately
+    ├── jobId = UUID.randomUUID().toString()
+    ├── executor.submit { batchJobService.launch(file, processorType, jobId) }
+    └── return jobId          ← HTTP response sent immediately
 
 Background thread
     │
     ▼
 BatchJobService.launch(file, processorType, jobId)
-    ├─ validates processorType exists
-    ├─ writes file to temp disk location
-    └─ runs Spring Batch job synchronously
-           │
-           ▼
-        Spring Batch Job
-            ├─ reads rows from CSV or XLSX (streaming, never full file in memory)
-            ├─ passes each row through FileProcessor.rowReader()  (transform)
-            ├─ passes domain objects through FileProcessor.rowProcessor()  (persist)
-            ├─ skips failed rows and records per-row errors
-            └─ writes annotated result file with status + failure-reason columns
-           │
-           ▼
-        BatchJobCompletionListener.afterJob()
-            ├─ writes result file to disk
-            └─ calls FileProcessor.onJobCompleted(BulkJobResult)  ← if implemented
+    │
+    ├── validates processorType is registered
+    └── runs Spring Batch job synchronously (blocks until complete)
+               │
+               ▼
+           Spring Batch Job
+               ├── SpreadsheetItemReader reads rows one at a time (streaming, never full file in RAM)
+               │       └── each row written to a temp CSV inline file as SUCCESS
+               │
+               ├── For each chunk of rows:
+               │       ├── rowReader(chunk) → Map<SpreadsheetRow, RowResult<T>>
+               │       │       ├── RowResult.Failure → error recorded, row excluded from write
+               │       │       └── RowResult.Success → domain object T forwarded
+               │       │
+               │       └── rowProcessor(successMap) → Map<SpreadsheetRow, RowResult<Unit>>
+               │               ├── RowResult.Failure → error recorded in result file
+               │               └── RowResult.Success → row marked written
+               │
+               └── BatchJobCompletionListener.afterJob()
+                       ├── RowResultCollector.writeResultFile()  ← produces annotated output
+                       └── BulkJobCompletionHandler.onJobCompleted(result)  ← if registered
 ```
 
-`BatchJobService.launch()` runs synchronously and blocks until the job completes. The caller is responsible for submitting it to a background executor — this keeps threading and context-propagation (MDC, request scope) out of the library.
+---
+
+## Data Flow
+
+This section traces exactly how data moves through each file in the library.
+
+### 1. `BatchJobService` — entry point
+
+The consuming app calls `launch()` on a background thread.
+
+```
+BatchJobService.launch(
+    sourceFile: File,       ← caller wrote the MultipartFile bytes here
+    processorType: String,  ← routes to the right FileProcessor
+    jobId: String,          ← caller generated this before submitting to executor
+)
+```
+
+- Looks up the `FileProcessor` from `FileProcessorRegistry` by `processorType`.
+- Builds Spring Batch `JobParameters` (jobId, processorType, filePath, fileType, startedAt).
+- Calls `FileProcessingJobFactory.create(...)` to assemble the `Job`.
+- Calls `job.execute(jobExecution)` — **blocks** until the job finishes.
+
+### 2. `FileProcessingJobFactory` — job assembly
+
+Called once per upload. Produces a uniquely named `Job` and `Step` so concurrent uploads never collide in the `JobRepository`.
+
+Wires together:
+- `SpreadsheetItemReader` — reads rows from the source file
+- `RowResultCollector` — collects every row and any errors during the job
+- A combined writer lambda — calls `rowReader()` then `rowProcessor()`
+- `RowSkipListener` — records system-level exceptions (DB failures, etc.) as row errors
+- `BatchJobCompletionListener` — fires after the job finishes
+
+### 3. `SpreadsheetItemReader` → `RowResultCollector` — reading
+
+Spring Batch calls `reader.read()` once per row. Internally delegates to either `CsvSpreadsheetReader` or `XlsxSpreadsheetReader` based on file extension.
+
+Every row is immediately passed to `RowResultCollector.recordRow(row)`:
+
+```
+SpreadsheetItemReader.read()
+    └── collector.recordRow(row)
+            └── writes row to an inline temp CSV file, pre-stamped SUCCESS
+```
+
+The inline file is a CSV regardless of input format and acts as the working copy for the result file. All rows are on disk at this point — nothing is held in memory except error messages.
+
+### 4. Writer lambda — `rowReader()` + `rowProcessor()`
+
+Spring Batch calls the writer once per chunk with `chunkSize` rows (default: 100).
+
+```
+writer.write(chunk: List<SpreadsheetRow>)
+    │
+    ├── rowReader(chunk)
+    │       returns Map<SpreadsheetRow, RowResult<T>>
+    │       │
+    │       ├── RowResult.Failure(error)
+    │       │       └── collector.recordError(row.rowNumber, error)
+    │       │               held in memory: errors: HashMap<Int, String>
+    │       │
+    │       └── RowResult.Success(domainObject)
+    │               └── added to successMap
+    │
+    └── rowProcessor(successMap)   ← only called if successMap is non-empty
+            returns Map<SpreadsheetRow, RowResult<Unit>>
+            │
+            ├── RowResult.Failure(error)
+            │       └── collector.recordError(row.rowNumber, error)
+            │
+            └── RowResult.Success(Unit)
+                    └── row counted as written
+```
+
+If either `rowReader` or `rowProcessor` **throws** (a system error, not a business error):
+- Spring Batch rolls back the chunk transaction
+- Retries each row individually (single-row chunks)
+- If the single-row call still throws → `RowSkipListener.onSkipInWrite(row, t)` → `collector.recordError(row.rowNumber, error)`
+
+### 5. `BatchJobCompletionListener.afterJob()` — post-job
+
+Fires after every job, success or failure.
+
+```
+afterJob(jobExecution)
+    │
+    ├── collector.writeResultFile()
+    │       │
+    │       ├── [CSV, no errors] — fast path: inline file is already the result (0 extra passes)
+    │       │
+    │       ├── [CSV, errors present] — re-reads inline file, stamps error rows FAILED
+    │       │
+    │       └── [XLSX input] — converts inline CSV → XLSX via SXSSFWorkbook (100-row sliding window)
+    │
+    ├── builds BulkJobResult { jobId, processorType, status, writeCount, skipCount, resultFilePath }
+    │
+    └── BulkJobCompletionHandler.onJobCompleted(result)  ← if a handler is registered for this processorType
+```
+
+### 6. `RowResultCollector` — result file generation
+
+Holds two pieces of state:
+- `inlineFile` — temp CSV on disk written during reading (every row pre-stamped SUCCESS)
+- `errors: HashMap<Int, String>` — rowNumber → error message (in-memory only)
+
+At `writeResultFile()`:
+- If no errors and CSV: returns the inline file directly (single pass total — no rewrite)
+- Otherwise: reads the inline file row-by-row, checks each row number against the error map, writes annotated output file with `status` / `failure-reason` columns
+
+### File-to-responsibility map
+
+| File | Responsibility |
+|---|---|
+| `BatchJobService` | Entry point — validates processor, builds job params, executes job |
+| `FileProcessingJobFactory` | Assembles Job + Step per upload; wires reader, writer, listener |
+| `SpreadsheetItemReader` | Delegates to CSV or XLSX reader; feeds rows to the collector |
+| `CsvSpreadsheetReader` | Streams CSV rows via Apache Commons CSV |
+| `XlsxSpreadsheetReader` | Streams XLSX rows via Apache POI SAX (no DOM loading) |
+| `RowResultCollector` | Writes every row to an inline temp file; holds error map; produces result file |
+| `FileProcessor<T>` | **You implement this** — `rowReader()` transforms, `rowProcessor()` persists |
+| `RowResult<T>` | Return type for both methods — `Success(value)` or `Failure(error)` |
+| `BatchJobCompletionListener` | `afterJob()` hook — triggers result file write and completion handler call |
+| `BulkJobCompletionHandler` | **You implement this** (optional) — receives `BulkJobResult` after the job |
+| `BulkJobCompletionHandlerRegistry` | Maps `processorType → BulkJobCompletionHandler`; validated at startup |
+| `FileProcessorRegistry` | Maps `processorType → FileProcessor`; validated at startup |
+| `BulkTempFileCleanupRunner` | On startup: deletes stale inline/result temp files older than 24 h |
+| `HasProcessorType` | Shared interface for `processorType` — implemented by both `FileProcessor` and `BulkJobCompletionHandler` |
 
 ---
 
@@ -73,96 +207,142 @@ Enable the library on your main application class or any `@Configuration` class:
 class MyApplication
 ```
 
-`@EnableBulkFileProcessing` registers three beans into the Spring context:
+`@EnableBulkFileProcessing` imports `BulkFileProcessingConfiguration`, which registers these beans:
 
 | Bean | Role |
 |---|---|
 | `FileProcessorRegistry` | Discovers and routes to all `FileProcessor` implementations |
+| `BulkJobCompletionHandlerRegistry` | Discovers all `BulkJobCompletionHandler` beans |
 | `FileProcessingJobFactory` | Builds Spring Batch jobs at runtime per upload |
-| `BatchJobService` | Accepts uploads, launches jobs, returns `jobId` |
+| `BatchJobService` | Validates processorType, executes the job, returns no value |
+| `BulkTempFileCleanupRunner` | Deletes stale temp files on startup |
 
-The library requires Spring Batch's `JobRepository` and a `PlatformTransactionManager` to be present — both are auto-configured by Spring Boot's `spring-boot-starter-batch`.
+**No beans are registered unless `@EnableBulkFileProcessing` is present.** The library will not interfere with applications that include it as a dependency without opting in.
+
+The library requires Spring Batch's `JobRepository` and a `PlatformTransactionManager` — both are auto-configured by `spring-boot-starter-batch`.
 
 ---
 
 ## Implementing a Processor
 
-Create a `@Component` that implements `FileProcessor<T>`, where `T` is your domain object:
+Create a `@Component` implementing `FileProcessor<T>`, where `T` is your domain object.
+
+Both `rowReader` and `rowProcessor` receive the **full chunk** as a `List` / `Map`, enabling batch DB lookups (e.g. a single `findAllByIdIn` for 100 rows instead of 100 individual queries).
 
 ```kotlin
 @Component
 class InvoiceUploadProcessor(
+    private val vendorRepository: VendorRepository,
     private val invoiceRepository: InvoiceRepository,
 ) : FileProcessor<Invoice> {
 
-    // Unique key — passed as a request parameter to identify this processor
     override val processorType = "invoice-upload"
+    override val chunkSize = 50          // rows per DB transaction (default: 100)
+    override val skipLimit = 500L        // abort job if more than 500 rows fail (default: unlimited)
 
-    // Rows processed per database transaction (default: 100)
-    override val chunkSize = 50
+    // Called once per chunk: transform rows → domain objects
+    override fun rowReader() = { rows: List<SpreadsheetRow> ->
 
-    // Step 1: transform a raw SpreadsheetRow into your domain object
-    override fun rowReader() = ItemProcessor<SpreadsheetRow, Invoice> { row ->
-        Invoice(
-            number  = row["invoice_number"] ?: error("missing invoice_number"),
-            amount  = row["amount"]?.toBigDecimal() ?: error("missing amount"),
-            dueDate = LocalDate.parse(row["due_date"]),
-        )
+        // One DB call for the whole chunk
+        val vendorIds = rows.mapNotNull { it.values["vendor_id"] }
+        val vendors = vendorRepository.findAllByIdIn(vendorIds).associateBy { it.id }
+
+        rows.associateWith { row ->
+            val vendorId = row.values["vendor_id"]
+            val vendor = vendors[vendorId]
+            when {
+                vendorId.isNullOrBlank() -> RowResult.failure("missing vendor_id")
+                vendor == null           -> RowResult.failure("vendor '$vendorId' not found")
+                else -> RowResult.success(
+                    Invoice(
+                        number  = row.values["invoice_number"] ?: return@associateWith RowResult.failure("missing invoice_number"),
+                        amount  = row.values["amount"]?.toBigDecimalOrNull() ?: return@associateWith RowResult.failure("invalid amount"),
+                        vendor  = vendor,
+                        dueDate = LocalDate.parse(row.values["due_date"]),
+                    )
+                )
+            }
+        }
     }
 
-    // Step 2: persist the transformed objects (called once per chunk)
-    override fun rowProcessor() = ItemWriter<Invoice> { chunk ->
-        invoiceRepository.saveAll(chunk.items)
+    // Called once per chunk: persist successfully transformed objects
+    override fun rowProcessor() = { results: Map<SpreadsheetRow, Invoice> ->
+        invoiceRepository.saveAll(results.values.toList())
+        results.keys.associateWith { RowResult.success(Unit) }
     }
 }
 ```
 
 ### `SpreadsheetRow`
 
-Each row is a thin wrapper around the spreadsheet data:
-
 | Property | Type | Description |
 |---|---|---|
-| `rowNumber` | `Int` | 1-based row index, excluding the header |
+| `rowNumber` | `Int` | 1-based row index in the source file, excluding the header |
 | `values` | `Map<String, String>` | Column name → cell value (trimmed) |
 
-Access values by column header name: `row["column_name"]` or `row.values["column_name"]`.
+Access values with `row.values["column_name"]`.
+
+### `rowReader()` contract
+
+- Receives the entire chunk as `List<SpreadsheetRow>` — ideal for batch DB lookups.
+- Returns `Map<SpreadsheetRow, RowResult<T>>` — one entry per input row.
+- `RowResult.failure("reason")` — error is written to the result file; row is excluded from `rowProcessor`.
+- `RowResult.success(domainObject)` — row proceeds to `rowProcessor`.
+- **Throw an exception** for unexpected system errors — Spring Batch isolates and skips the failing row.
+
+### `rowProcessor()` contract
+
+- Receives only the rows that produced `RowResult.Success` from `rowReader`.
+- Returns `Map<SpreadsheetRow, RowResult<Unit>>` — one entry per input row.
+- `RowResult.failure("reason")` — error is written to the result file.
+- `RowResult.success(Unit)` — row counted as successfully written.
+- **Throw an exception** for system errors — Spring Batch isolates and skips the failing row.
 
 ### Rules
 
-- `processorType` must be unique across all registered processors — the app will fail to start with a duplicate.
-- Throwing from `rowReader()` causes that row to be skipped and its error recorded in the result file; it does not abort the job.
-- Throwing from `rowProcessor()` causes all rows in that chunk to be skipped.
-- `chunkSize` controls how many rows are processed per database transaction — tune it based on row complexity and DB write latency.
+- `processorType` must be unique — the app fails to start on a duplicate.
+- `chunkSize` controls rows per DB transaction (default: 100).
+- `skipLimit` caps how many rows may be skipped before the job aborts (default: unlimited).
 
 ---
 
 ## Handling Job Completion
 
-Implement `BulkJobCompletionHandler` alongside `FileProcessor` to receive a callback when your job finishes:
+Optionally implement `BulkJobCompletionHandler` to receive a callback when your processor's job finishes. It does **not** need to be the same class as `FileProcessor`.
 
 ```kotlin
 @Component
-class InvoiceUploadProcessor(
-    private val invoiceRepository: InvoiceRepository,
+class InvoiceJobCompletionHandler(
     private val notificationService: NotificationService,
-) : FileProcessor<Invoice>, BulkJobCompletionHandler {
+) : BulkJobCompletionHandler {
 
     override val processorType = "invoice-upload"
-
-    override fun rowReader() = ...
-    override fun rowProcessor() = ...
 
     override fun onJobCompleted(result: BulkJobResult) {
         when (result.status) {
             BatchStatus.COMPLETED -> notificationService.send(
-                "Upload complete: ${result.writeCount} rows saved, ${result.skipCount} skipped."
+                subject = "Invoice upload complete",
+                body    = "${result.writeCount} rows saved, ${result.skipCount} skipped. " +
+                          "Result file: ${result.resultFilePath}",
             )
             else -> notificationService.send(
-                "Upload failed. Check result file: ${result.resultFilePath}"
+                subject = "Invoice upload failed",
+                body    = "Job ${result.jobId} ended with status ${result.status}.",
             )
         }
     }
+}
+```
+
+Or combine with `FileProcessor` in one class — both work:
+
+```kotlin
+@Component
+class InvoiceUploadProcessor(...) : FileProcessor<Invoice>, BulkJobCompletionHandler {
+    override val processorType = "invoice-upload"
+    override fun rowReader() = ...
+    override fun rowProcessor() = ...
+    override fun onJobCompleted(result: BulkJobResult) { ... }
 }
 ```
 
@@ -174,173 +354,196 @@ class InvoiceUploadProcessor(
 | `processorType` | `String` | Which processor handled the file |
 | `status` | `BatchStatus` | Final Spring Batch status (`COMPLETED`, `FAILED`, etc.) |
 | `writeCount` | `Long` | Total rows successfully written |
-| `skipCount` | `Long` | Total rows skipped due to errors |
+| `skipCount` | `Long` | Total rows skipped due to exceptions |
 | `resultFilePath` | `String?` | Absolute path to the annotated result file, or `null` if no rows were read |
 
-**Thread safety:** your processor bean is a singleton. If multiple uploads of the same `processorType` run concurrently, `onJobCompleted` will be called from different threads simultaneously — ensure any shared state in your processor is thread-safe.
+**Thread safety:** handler beans are singletons. If multiple jobs of the same `processorType` run concurrently, `onJobCompleted` is called from different threads — guard any shared state.
 
-**Exceptions:** any `Exception` thrown from `onJobCompleted` is re-thrown after logging; it does not affect temp file cleanup or the job's recorded status in Spring Batch's `JobRepository`.
+**Exceptions:** any exception thrown from `onJobCompleted` is re-thrown after logging. It does not affect temp file cleanup or the job's recorded status in Spring Batch's `JobRepository`.
 
 ---
 
 ## Triggering an Upload
 
-Inject `BatchJobService` into your controller. Generate a `jobId`, submit `launch()` to a background executor, and return the `jobId` immediately:
+Inject `BatchJobService` into your controller. Write the uploaded file to disk (so it survives the HTTP thread), generate a `jobId`, submit `launch()` to a background executor, and return the `jobId` immediately:
 
 ```kotlin
 @RestController
 @RequestMapping("/bulk")
 class BulkUploadController(
     private val batchJobService: BatchJobService,
-    private val executor: ExecutorService,          // your app's executor
+    private val executor: ExecutorService,
 ) {
-
     @PostMapping("/upload")
     fun upload(
         @RequestParam file: MultipartFile,
         @RequestParam processorType: String,
     ): String {
         val jobId = UUID.randomUUID().toString()
-        executor.submit { batchJobService.launch(file = file, processorType = processorType, jobId = jobId) }
+
+        // Write to disk on the HTTP thread — the MultipartFile stream may be gone by the time
+        // the background thread runs.
+        val tempFile = Files.createTempFile("upload-$processorType-$jobId", ".${file.originalFilename?.substringAfterLast('.') ?: "csv"}").toFile()
+        file.transferTo(tempFile)
+
+        executor.submit {
+            try {
+                batchJobService.launch(
+                    sourceFile    = tempFile,
+                    processorType = processorType,
+                    jobId         = jobId,
+                )
+            } finally {
+                tempFile.delete()
+            }
+        }
+
         return jobId
     }
 }
 ```
 
-`launch()` runs synchronously on the background thread and blocks until the job completes. The HTTP thread returns the `jobId` immediately without waiting.
-
-Use `jobId` to correlate logs or notifications back to a specific upload.
+`launch()` runs synchronously on the background thread and blocks until the job completes. The HTTP thread returns `jobId` immediately without waiting.
 
 ---
 
 ## Result File
 
-After a job finishes, the library writes an annotated copy of the original file with two extra columns appended to every row:
+After a job finishes, the library writes an annotated copy of the input with two extra columns on every row:
 
 | Column | Values |
 |---|---|
 | `status` | `SUCCESS` or `FAILED` |
-| `failure-reason` | Error message for failed rows; empty for successful rows |
+| `failure-reason` | Human-readable error for failed rows; empty for successful rows |
 
-The result file format matches the upload format — a CSV upload produces a CSV result, an XLSX upload produces an XLSX result.
+- A CSV upload produces a CSV result; XLSX produces XLSX.
+- The absolute path is in `BulkJobResult.resultFilePath`. It is `null` only when the file had zero data rows.
+- `RowResult.failure("reason")` from `rowReader` or `rowProcessor` writes the reason into `failure-reason`.
+- Rows that throw a system exception (caught by Spring Batch's skip) also appear as FAILED with the exception message.
 
-The absolute path to the result file is available in `BulkJobResult.resultFilePath`. It is `null` only when the file had no data rows (header-only or empty).
+---
+
+## RowResult — Returning Errors Without Throwing
+
+`RowResult<T>` is a sealed class that separates **expected business errors** from **unexpected system exceptions**.
+
+```kotlin
+sealed class RowResult<out T : Any> {
+    data class Success<out T : Any>(val value: T) : RowResult<T>()
+    data class Failure(val error: String)         : RowResult<Nothing>()
+
+    companion object {
+        fun <T : Any> success(value: T): RowResult<T>    = Success(value)
+        fun failure(error: String): RowResult<Nothing>   = Failure(error)
+    }
+}
+```
+
+| Scenario | How to signal it |
+|---|---|
+| Invalid row value, missing reference, validation error | Return `RowResult.failure("reason")` |
+| DB unavailable, network error, unexpected NPE | Throw an exception — Spring Batch isolates and skips the row |
+
+**Why two mechanisms?**
+- `RowResult.Failure` is recorded immediately without exception overhead, no Spring Batch retry cycle.
+- Throwing forces Spring Batch to retry the chunk item-by-item, which is appropriate for transient failures (DB blip) but wasteful for deterministic business errors (a row with a permanently invalid field will always fail).
 
 ---
 
 ## Internals
 
-### Request Flow
-
-```
-// HTTP thread — caller's responsibility
-jobId = UUID.randomUUID().toString()
-executor.submit { batchJobService.launch(file, processorType, jobId) }
-return jobId
-
-// Background thread
-batchJobService.launch(file, processorType, jobId)
-    │
-    ├─ FileProcessorRegistry.get(processorType)   // validates processor exists
-    │
-    ├─ Files.createTempFile("bulk-{type}-{jobId}", ".{ext}")
-    ├─ file.transferTo(tempFile)
-    │
-    ├─ JobParametersBuilder
-    │     .addString("jobId", ...)
-    │     .addString("processorType", ...)
-    │     .addString("filePath", ...)
-    │     .addString("fileType", ...)
-    │     .addLong("startedAt", ...)
-    │
-    ├─ FileProcessingJobFactory.create(processor, jobId, filePath, fileType)
-    ├─ job.execute(jobExecution)                  // blocks until complete
-    └─ tempFile.delete()                          // always, in finally block
-```
-
 ### File Reading
 
-The library uses two readers selected automatically by file extension:
+Two readers are selected automatically by file extension:
 
 **CSV** (`CsvSpreadsheetReader`)
-- Uses Apache Commons CSV
-- First row is the header; subsequent rows become `SpreadsheetRow` instances
-- Cell values are trimmed
+- Uses Apache Commons CSV.
+- First row is the header; subsequent rows become `SpreadsheetRow` instances with trimmed cell values.
 
 **XLSX** (`XlsxSpreadsheetReader`)
-- Uses Apache POI's SAX event model (`XSSFReader` + `XSSFSheetXMLHandler`) — *not* the DOM-based `XSSFWorkbook`
-- DOM parsing loads the entire workbook into heap (~5–10× file size); SAX walks the XML incrementally and produces one `SpreadsheetRow` at a time
-- Missing cells (sparse rows) default to empty string via `sortedMapOf`
-- Only the first sheet is processed
+- Uses Apache POI's SAX event model (`XSSFReader` + `XSSFSheetXMLHandler`) — not the DOM-based `XSSFWorkbook`.
+- DOM parsing loads the entire workbook into heap (~5–10× file size). SAX walks the XML incrementally, producing one `SpreadsheetRow` per event.
+- Sparse rows (missing cells) default to empty string.
+- Only the first sheet is processed.
 
-Both readers register each row with `RowResultCollector` as it is read, so the result file can include rows that failed at any stage.
+Both readers call `collector.recordRow(row)` for every row as it is read, so the result file includes rows that failed at any stage.
 
-### Spring Batch Job Structure
+### Chunk Processing
 
-Each upload creates a brand-new, uniquely named `Job` and `Step`:
+Spring Batch's fault-tolerant step:
 
 ```
 Job  "job-{jobId}"
- └─ Step  "step-{jobId}"
-      ├─ reader:    SpreadsheetItemReader   (reads one SpreadsheetRow at a time)
-      ├─ processor: FileProcessor.rowReader()  (SpreadsheetRow → T)
-      ├─ writer:    FileProcessor.rowProcessor()  (List<T> → persist)
-      ├─ chunkSize: FileProcessor.chunkSize  (default 100)
-      ├─ faultTolerant()
-      │    .skip(Exception::class)
-      │    .skipLimit(Long.MAX_VALUE)         // never abort for row errors
-      └─ skipListener: RowSkipListener        // records per-row errors
+ └── Step  "step-{jobId}"
+       ├── reader:     SpreadsheetItemReader     (reads one SpreadsheetRow at a time)
+       ├── writer:     combined lambda           (rowReader + rowProcessor per chunk)
+       ├── chunkSize:  FileProcessor.chunkSize   (default 100)
+       ├── faultTolerant()
+       │     .skip(Exception::class)
+       │     .skipLimit(FileProcessor.skipLimit) (default: unlimited)
+       └── skipListener: RowSkipListener         (records system exceptions as row errors)
 ```
 
-Unique job/step names are required by Spring Batch's `JobRepository` — reusing the same name with different parameters would be treated as a restart of the previous run.
+There is **no separate processor phase** — `rowReader()` (transform) and `rowProcessor()` (persist) are both called inside the writer lambda. This gives both functions access to the full chunk simultaneously.
 
-**Chunk processing:** rows are read and buffered up to `chunkSize`, then `rowProcessor()` is called once with the full chunk, all inside one database transaction. If the transaction fails, all rows in the chunk are individually retried and skipped if they fail again.
+**On chunk exception:** Spring Batch rolls back the transaction and replays each row individually. For each single-row replay, if the writer throws, `RowSkipListener.onSkipInWrite(row, t)` is called — the library records the error against that specific row number.
 
-**Skip behaviour:** `skipLimit(Long.MAX_VALUE)` means a single bad row never aborts the job. Each skipped row's error is recorded by `RowSkipListener` and included in the result file's `failure-reason` column.
+**Unique job/step names** are required by Spring Batch's `JobRepository` — reusing the same name with different parameters would be treated as a restart of the previous run.
 
-### Error Collection
+### Error Collection and Result File
 
-`RowResultCollector` coordinates result file generation across the entire job:
+`RowResultCollector` coordinates between the reading phase and the final result file:
 
+**During the job:**
 ```
-During job execution:
-  SpreadsheetItemReader.read()
-      └─ collector.recordRow(row)     ← streams row to a temp CSV on disk immediately
+reader.read() → collector.recordRow(row)
+    └── streams row to inline temp CSV on disk (pre-stamped SUCCESS)
 
-  RowSkipListener.onSkipInProcess()
-      └─ collector.recordError(rowNumber, errorMessage)   ← held in memory (Map<Int, String>)
+rowReader() / rowProcessor() returns RowResult.Failure
+    └── collector.recordError(rowNumber, error)
+            errors: HashMap<Int, String>   ← in-memory only
 
-After job completion:
-  BatchJobCompletionListener.afterJob()
-      └─ collector.writeResultFile()
-              ├─ reads temp CSV row by row
-              ├─ looks up error for each row number
-              └─ writes annotated output file (CSV via Commons CSV, XLSX via SXSSFWorkbook)
+RowSkipListener.onSkipInWrite(row, t)
+    └── collector.recordError(row.rowNumber, t.message)
 ```
 
-The design ensures the full file is never held in memory:
-- Rows stream to a temp file during reading (one row at a time)
-- Only error messages are held in memory (one string per failed row)
-- XLSX output uses `SXSSFWorkbook` with a 100-row in-memory sliding window
+**After the job (`writeResultFile()`):**
+
+| Condition | Passes | Notes |
+|---|---|---|
+| CSV, zero errors | 1 | Inline file is already the result — returned as-is |
+| CSV, errors present | 2 | Reads inline CSV, rewrites with corrected `status`/`failure-reason` |
+| XLSX | 2 always | Reads inline CSV, converts to XLSX via `SXSSFWorkbook` (100-row sliding window) |
+
+Only error messages are held in memory — the full file content is always on disk.
+
+### Startup Cleanup
+
+`BulkTempFileCleanupRunner` runs once at startup (`ApplicationRunner`). It scans the system temp directory and deletes:
+- Files matching `bulk-inline-*` (inline working files)
+- Files matching `bulk-*-result-*` (result files)
+
+…that are older than 24 hours (configurable by overriding the `bulkTempFileCleanupRunner` bean).
+
+This recovers disk space left by temp files from a previous JVM crash or ungraceful shutdown.
 
 ### Thread Model
 
 ```
 HTTP thread
-    ├─ generates jobId
-    ├─ submits launch() to executor   ──► your executor (library has no internal pool)
-    └─ returns jobId immediately
+    ├── generates jobId
+    ├── writes MultipartFile bytes to temp disk file
+    ├── submits launch() to your executor
+    └── returns jobId immediately
 
 Your executor thread
-    ├─ batchJobService.launch(file, processorType, jobId)   // blocks here
-    │     ├─ job.execute(jobExecution)
-    │     ├─ ... (chunk processing) ...
-    │     ├─ BatchJobCompletionListener.afterJob()
-    │     │     └─ processor.onJobCompleted(result)
-    │     └─ tempFile.delete()
-    └─ thread released
+    ├── batchJobService.launch(sourceFile, processorType, jobId)  ← blocks here
+    │     ├── Spring Batch job executes (read → transform → persist, chunk by chunk)
+    │     ├── BatchJobCompletionListener.afterJob()
+    │     │     ├── RowResultCollector.writeResultFile()
+    │     │     └── BulkJobCompletionHandler.onJobCompleted(result)
+    │     └── returns (job is done)
+    └── thread released; caller deletes tempFile in finally block
 ```
 
-The library has no internal thread pool — threading is entirely the caller's responsibility. This lets consuming apps propagate MDC, request context, or security context to the background thread using whatever mechanism they already use (`ContextExecutorService`, coroutines, etc.).
-
-The temp file is always deleted in a `finally` block — it is removed whether the job succeeds, fails, or throws unexpectedly.
+The library has **no internal thread pool** — threading is the caller's responsibility. This lets consuming apps propagate MDC, request context, or security context to the background thread using their existing mechanism (`ContextExecutorService`, virtual threads, coroutines, etc.).

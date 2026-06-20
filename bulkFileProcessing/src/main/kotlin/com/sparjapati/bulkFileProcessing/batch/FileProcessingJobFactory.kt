@@ -62,12 +62,35 @@ class FileProcessingJobFactory(
             handler = handlerRegistry.find(processor.processorType),
         )
 
+        val rowReader = typedProcessor.rowReader()
+        val rowProcessor = typedProcessor.rowProcessor()
+
         val step: Step = StepBuilder("step-$jobId", jobRepository)
-            .chunk<SpreadsheetRow, Any>(typedProcessor.chunkSize)
+            .chunk<SpreadsheetRow, SpreadsheetRow>(typedProcessor.chunkSize)
             .transactionManager(transactionManager)
             .reader(reader)
-            .processor(typedProcessor.rowReader())
-            .writer(typedProcessor.rowProcessor())
+            .writer { chunk ->
+                val rows = chunk.items
+
+                // Split rowReader results: record business failures immediately; pass only successes onward.
+                val readerResults = rowReader(rows)
+                val successMap = linkedMapOf<SpreadsheetRow, Any>()
+                for ((row, result) in readerResults) {
+                    when (result) {
+                        is RowResult.Success -> successMap[row] = result.value
+                        is RowResult.Failure -> collector.recordError(rowNumber = row.rowNumber, error = result.error)
+                    }
+                }
+
+                if (successMap.isNotEmpty()) {
+                    val processorResults = rowProcessor(successMap)
+                    for ((row, result) in processorResults) {
+                        if (result is RowResult.Failure) {
+                            collector.recordError(rowNumber = row.rowNumber, error = result.error)
+                        }
+                    }
+                }
+            }
             .faultTolerant()
             .skip(Exception::class.java)
             .skipLimit(typedProcessor.skipLimit)
@@ -91,7 +114,7 @@ class FileProcessingJobFactory(
 private class RowSkipListener(
     private val jobId: String,
     private val collector: RowResultCollector,
-) : SkipListener<SpreadsheetRow, Any> {
+) : SkipListener<SpreadsheetRow, SpreadsheetRow> {
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger(RowSkipListener::class.java)
@@ -101,15 +124,11 @@ private class RowSkipListener(
         LOGGER.warn("jobId={} — row skipped on read: {}", jobId, t.message)
     }
 
-    override fun onSkipInProcess(item: SpreadsheetRow, t: Throwable) {
-        val error = t.message ?: t::class.simpleName ?: "unknown error"
-        LOGGER.warn("jobId={} — row #{} skipped on process: {}", jobId, item.rowNumber, error)
-        collector.recordError(rowNumber = item.rowNumber, error = error)
-    }
+    override fun onSkipInProcess(item: SpreadsheetRow, t: Throwable) = Unit
 
-    override fun onSkipInWrite(item: Any, t: Throwable) {
+    override fun onSkipInWrite(item: SpreadsheetRow, t: Throwable) {
         val error = t.message ?: t::class.simpleName ?: "unknown error"
-        LOGGER.warn("jobId={} — item skipped on write: {} | error: {}", jobId, item, error)
-        // item here is the domain object T, not SpreadsheetRow — row number not available
+        LOGGER.warn("jobId={} — row #{} skipped on write: {}", jobId, item.rowNumber, error)
+        collector.recordError(rowNumber = item.rowNumber, error = error)
     }
 }

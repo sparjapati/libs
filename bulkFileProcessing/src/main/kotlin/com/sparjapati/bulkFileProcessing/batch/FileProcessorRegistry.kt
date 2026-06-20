@@ -37,14 +37,8 @@ class FileProcessorRegistry(processors: List<FileProcessor<*>>) {
     }
 
     /**
-     * Returns the [FileProcessor] registered for [processorType].
-     *
-     * @throws IllegalArgumentException if no processor is registered for the given type,
-     *   with a message listing all known types to aid diagnosis.
+     * Returns the [FileProcessor] registered for [processorType], or `null` if none is registered.
+     * The caller is responsible for handling the `null` case.
      */
-    fun get(processorType: String): FileProcessor<*> = registry[processorType]
-        ?: throw IllegalArgumentException(
-            "No FileProcessor registered for processorType='$processorType'. " +
-                "Known types: ${registry.keys.sorted()}"
-        )
+    fun find(processorType: String): FileProcessor<*>? = registry[processorType]
 }

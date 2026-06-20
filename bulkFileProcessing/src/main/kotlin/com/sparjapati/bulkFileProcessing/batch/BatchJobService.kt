@@ -63,7 +63,14 @@ class BatchJobService(
         processorType: String,
         jobId: String,
     ) {
-        val processor = registry.get(processorType)
+        val processor = registry.find(processorType)
+        if (processor == null) {
+            LOGGER.error(
+                "No FileProcessor registered for processorType='{}' jobId={} — job not started",
+                processorType, jobId,
+            )
+            return
+        }
         val extension = sourceFile.extension.lowercase().ifEmpty { "csv" }
 
         val params = JobParametersBuilder()
