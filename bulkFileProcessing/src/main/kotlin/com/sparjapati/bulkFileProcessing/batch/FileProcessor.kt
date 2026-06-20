@@ -32,12 +32,11 @@ package com.sparjapati.bulkFileProcessing.batch
  *     override val extraColumns = listOf("invoice_id", "status_code")
  *
  *     override fun rowProcessor() = { results: Map<SpreadsheetRow, Invoice> ->
- *         val saved = repo.saveAll(results.values.toList())
- *         results.keys.zip(saved).associate { (row, invoice) ->
- *             row to RowResult.success(mapOf(
- *                 "invoice_id"  to invoice.id,
- *                 "status_code" to invoice.statusCode,
- *             ))
+ *         val saved = repo.saveAll(results.values.toList()).associateBy { it.sourceId }
+ *         results.toRowResults { row, invoice ->
+ *             val created = saved[invoice.sourceId]
+ *                 ?: return@toRowResults RowResult.failure("save returned no entity")
+ *             RowResult.withExtras("invoice_id" to created.id, "status_code" to created.statusCode)
  *         }
  *     }
  * }
