@@ -50,9 +50,9 @@ BatchJobService.launch(file, processorType, jobId)
                │       │       ├── RowResult.Failure → error recorded, row excluded from write
                │       │       └── RowResult.Success → domain object T forwarded
                │       │
-               │       └── rowProcessor(successMap) → Map<SpreadsheetRow, RowResult<Unit>>
+               │       └── rowProcessor(successMap) → Map<SpreadsheetRow, RowResult<ExtraColumns>>
                │               ├── RowResult.Failure → error recorded in result file
-               │               └── RowResult.Success → row marked written
+               │               └── RowResult.Success(extras) → extra columns appended to result row
                │
                └── BatchJobCompletionListener.afterJob()
                        ├── RowResultCollector.writeResultFile()  ← produces annotated output
@@ -105,7 +105,7 @@ SpreadsheetItemReader.read()
             └── writes row to an inline temp CSV file, pre-stamped SUCCESS
 ```
 
-The inline file is a CSV regardless of input format and acts as the working copy for the result file. All rows are on disk at this point — nothing is held in memory except error messages.
+The inline file is a CSV regardless of input format and acts as the working copy for the result file. All rows are on disk at this point — nothing is held in memory except error messages and extra column values.
 
 ### 4. Writer lambda — `rowReader()` + `rowProcessor()`
 
@@ -125,13 +125,14 @@ writer.write(chunk: List<SpreadsheetRow>)
     │               └── added to successMap
     │
     └── rowProcessor(successMap)   ← only called if successMap is non-empty
-            returns Map<SpreadsheetRow, RowResult<Unit>>
+            returns Map<SpreadsheetRow, RowResult<ExtraColumns>>
             │
             ├── RowResult.Failure(error)
             │       └── collector.recordError(row.rowNumber, error)
             │
-            └── RowResult.Success(Unit)
-                    └── row counted as written
+            └── RowResult.Success(extras)
+                    └── collector.recordExtra(row.rowNumber, extras)
+                            extras appended as additional columns in the result file
 ```
 
 If either `rowReader` or `rowProcessor` **throws** (a system error, not a business error):
@@ -148,9 +149,10 @@ afterJob(jobExecution)
     │
     ├── collector.writeResultFile()
     │       │
-    │       ├── [CSV, no errors] — fast path: inline file is already the result (0 extra passes)
+    │       ├── [CSV, no errors, no extras] — fast path: inline file moved to result path (0 extra passes)
     │       │
-    │       ├── [CSV, errors present] — re-reads inline file, stamps error rows FAILED
+    │       ├── [CSV, errors or extras present] — re-reads inline file, stamps error rows FAILED,
+    │       │       appends extra columns
     │       │
     │       └── [XLSX input] — converts inline CSV → XLSX via SXSSFWorkbook (100-row sliding window)
     │
@@ -161,13 +163,16 @@ afterJob(jobExecution)
 
 ### 6. `RowResultCollector` — result file generation
 
-Holds two pieces of state:
+Holds three pieces of state:
 - `inlineFile` — temp CSV on disk written during reading (every row pre-stamped SUCCESS)
 - `errors: HashMap<Int, String>` — rowNumber → error message (in-memory only)
+- `rowExtras: HashMap<Int, ExtraColumns>` — rowNumber → extra column values (in-memory only)
+
+Result file location: `{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}`
 
 At `writeResultFile()`:
-- If no errors and CSV: returns the inline file directly (single pass total — no rewrite)
-- Otherwise: reads the inline file row-by-row, checks each row number against the error map, writes annotated output file with `status` / `failure-reason` columns
+- If no errors, no extras, and CSV: moves the inline file to the result path directly (single pass total — no rewrite)
+- Otherwise: reads the inline file row-by-row, checks each row number against the error map and extras map, writes annotated output file with `status` / `failure-reason` / extra columns
 
 ### File-to-responsibility map
 
@@ -178,14 +183,15 @@ At `writeResultFile()`:
 | `SpreadsheetItemReader` | Delegates to CSV or XLSX reader; feeds rows to the collector |
 | `CsvSpreadsheetReader` | Streams CSV rows via Apache Commons CSV |
 | `XlsxSpreadsheetReader` | Streams XLSX rows via Apache POI SAX (no DOM loading) |
-| `RowResultCollector` | Writes every row to an inline temp file; holds error map; produces result file |
+| `RowResultCollector` | Writes every row to an inline temp file; holds error and extras maps; produces result file |
 | `FileProcessor<T>` | **You implement this** — `rowReader()` transforms, `rowProcessor()` persists |
-| `RowResult<T>` | Return type for both methods — `Success(value)` or `Failure(error)` |
+| `RowResult<T>` | Return type for both methods — `Success(value)` or `Failure(error)`; `ExtraColumns` variant used by `rowProcessor` |
+| `ExtraColumns` | Typealias for `Map<String, String>` — extra columns appended to each result row by `rowProcessor` |
 | `BatchJobCompletionListener` | `afterJob()` hook — triggers result file write and completion handler call |
 | `BulkJobCompletionHandler` | **You implement this** (optional) — receives `BulkJobResult` after the job |
 | `BulkJobCompletionHandlerRegistry` | Maps `processorType → BulkJobCompletionHandler`; validated at startup |
 | `FileProcessorRegistry` | Maps `processorType → FileProcessor`; validated at startup |
-| `BulkTempFileCleanupRunner` | On startup: deletes stale inline/result temp files older than 24 h |
+| `BulkTempFileCleanupRunner` | On startup: deletes stale inline temp files older than 24 h |
 | `HasProcessorType` | Shared interface for `processorType` — implemented by both `FileProcessor` and `BulkJobCompletionHandler` |
 
 ---
@@ -215,7 +221,7 @@ class MyApplication
 | `BulkJobCompletionHandlerRegistry` | Discovers all `BulkJobCompletionHandler` beans |
 | `FileProcessingJobFactory` | Builds Spring Batch jobs at runtime per upload |
 | `BatchJobService` | Validates processorType, executes the job, returns no value |
-| `BulkTempFileCleanupRunner` | Deletes stale temp files on startup |
+| `BulkTempFileCleanupRunner` | Deletes stale inline temp files on startup |
 
 **No beans are registered unless `@EnableBulkFileProcessing` is present.** The library will not interfere with applications that include it as a dependency without opting in.
 
@@ -229,6 +235,8 @@ Create a `@Component` implementing `FileProcessor<T>`, where `T` is your domain 
 
 Both `rowReader` and `rowProcessor` receive the **full chunk** as a `List` / `Map`, enabling batch DB lookups (e.g. a single `findAllByIdIn` for 100 rows instead of 100 individual queries).
 
+`rowProcessor` returns `Map<SpreadsheetRow, RowResult<ExtraColumns>>`. The `ExtraColumns` value (`Map<String, String>`) is appended as additional columns in the result file — useful for returning generated IDs, status codes, or any other derived data back to the uploader.
+
 ```kotlin
 @Component
 class InvoiceUploadProcessor(
@@ -239,6 +247,10 @@ class InvoiceUploadProcessor(
     override val processorType = "invoice-upload"
     override val chunkSize = 50          // rows per DB transaction (default: 100)
     override val skipLimit = 500L        // abort job if more than 500 rows fail (default: unlimited)
+
+    // Declare the extra column names and their order in the result file (optional but recommended).
+    // Without this, column order is inferred from the first non-empty extras map returned.
+    override val extraColumns = listOf("invoice_id", "created_at")
 
     // Called once per chunk: transform rows → domain objects
     override fun rowReader() = { rows: List<SpreadsheetRow> ->
@@ -265,11 +277,24 @@ class InvoiceUploadProcessor(
         }
     }
 
-    // Called once per chunk: persist successfully transformed objects
+    // Called once per chunk: persist successfully transformed objects and return extra columns
     override fun rowProcessor() = { results: Map<SpreadsheetRow, Invoice> ->
-        invoiceRepository.saveAll(results.values.toList())
-        results.keys.associateWith { RowResult.success(Unit) }
+        val saved = invoiceRepository.saveAll(results.values.toList()).associateBy { it.sourceId }
+        results.toRowResults { _, invoice ->
+            val created = saved[invoice.sourceId]
+                ?: return@toRowResults RowResult.failure("save returned no entity")
+            RowResult.withExtras("invoice_id" to created.id, "created_at" to created.createdAt.toString())
+        }
     }
+}
+```
+
+If there are no extra columns to return, use `allSaved()`:
+
+```kotlin
+override fun rowProcessor() = { results: Map<SpreadsheetRow, Invoice> ->
+    invoiceRepository.saveAll(results.values.toList())
+    results.allSaved()
 }
 ```
 
@@ -293,10 +318,28 @@ Access values with `row.values["column_name"]`.
 ### `rowProcessor()` contract
 
 - Receives only the rows that produced `RowResult.Success` from `rowReader`.
-- Returns `Map<SpreadsheetRow, RowResult<Unit>>` — one entry per input row.
+- Returns `Map<SpreadsheetRow, RowResult<ExtraColumns>>` — one entry per input row.
 - `RowResult.failure("reason")` — error is written to the result file.
-- `RowResult.success(Unit)` — row counted as successfully written.
+- `RowResult.noExtras()` / `RowResult.withExtras(...)` / `results.allSaved()` / `results.toRowResults { ... }` — row counted as successfully written; optional extra columns appended to the result file.
 - **Throw an exception** for system errors — Spring Batch isolates and skips the failing row.
+
+### `rowProcessor` helpers
+
+| Helper | When to use |
+|---|---|
+| `results.allSaved()` | All rows persisted successfully, no extra columns |
+| `RowResult.noExtras()` | Single row succeeded, no extra columns |
+| `RowResult.withExtras("col" to value, ...)` | Single row succeeded with inline extra columns |
+| `RowResult.withExtras(map)` | Single row succeeded with a pre-built extras map |
+| `results.toRowResults { row, value -> ... }` | Per-row result differs (some failures, or row-specific extras) |
+
+### `extraColumns` property
+
+Declare the names and order of extra columns added by `rowProcessor`. Without this, column order is discovered from the first non-empty `ExtraColumns` map returned during the job, which can be non-deterministic when multiple chunks run. Override for stable column ordering:
+
+```kotlin
+override val extraColumns = listOf("account_id", "status_code")
+```
 
 ### Rules
 
@@ -409,17 +452,25 @@ class BulkUploadController(
 
 ## Result File
 
-After a job finishes, the library writes an annotated copy of the input with two extra columns on every row:
+After a job finishes, the library writes an annotated copy of the input to a structured directory:
+
+```
+{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}
+```
+
+The file contains all original columns plus these appended columns:
 
 | Column | Values |
 |---|---|
 | `status` | `SUCCESS` or `FAILED` |
 | `failure-reason` | Human-readable error for failed rows; empty for successful rows |
+| *(extra columns)* | Any key-value pairs returned via `RowResult.withExtras(...)` from `rowProcessor` |
 
 - A CSV upload produces a CSV result; XLSX produces XLSX.
 - The absolute path is in `BulkJobResult.resultFilePath`. It is `null` only when the file had zero data rows.
 - `RowResult.failure("reason")` from `rowReader` or `rowProcessor` writes the reason into `failure-reason`.
 - Rows that throw a system exception (caught by Spring Batch's skip) also appear as FAILED with the exception message.
+- Extra columns are appended after `failure-reason`. Column order follows `FileProcessor.extraColumns` if declared, otherwise discovered from the first non-empty extras map.
 
 ---
 
@@ -433,15 +484,31 @@ sealed class RowResult<out T : Any> {
     data class Failure(val error: String)         : RowResult<Nothing>()
 
     companion object {
+        // rowReader helpers
         fun <T : Any> success(value: T): RowResult<T>    = Success(value)
         fun failure(error: String): RowResult<Nothing>   = Failure(error)
+
+        // rowProcessor helpers
+        fun noExtras(): RowResult<ExtraColumns>                          = Success(emptyMap())
+        fun withExtras(vararg columns: Pair<String, String>): RowResult<ExtraColumns>
+        fun withExtras(columns: ExtraColumns): RowResult<ExtraColumns>
     }
 }
+
+// Map extension helpers for rowProcessor
+fun <T : Any> Map<SpreadsheetRow, T>.allSaved(): Map<SpreadsheetRow, RowResult<ExtraColumns>>
+fun <T : Any> Map<SpreadsheetRow, T>.toRowResults(
+    block: (row: SpreadsheetRow, value: T) -> RowResult<ExtraColumns>,
+): Map<SpreadsheetRow, RowResult<ExtraColumns>>
 ```
+
+`ExtraColumns` is a typealias for `Map<String, String>`. Key-value pairs in a `RowResult.Success` from `rowProcessor` are appended as additional columns in the result file.
 
 | Scenario | How to signal it |
 |---|---|
 | Invalid row value, missing reference, validation error | Return `RowResult.failure("reason")` |
+| Row persisted, no extra data to surface | Return `RowResult.noExtras()` or use `results.allSaved()` |
+| Row persisted, return extra columns (e.g. generated ID) | Return `RowResult.withExtras("col" to value, ...)` or use `results.toRowResults { ... }` |
 | DB unavailable, network error, unexpected NPE | Throw an exception — Spring Batch isolates and skips the row |
 
 **Why two mechanisms?**
@@ -499,9 +566,16 @@ There is **no separate processor phase** — `rowReader()` (transform) and `rowP
 reader.read() → collector.recordRow(row)
     └── streams row to inline temp CSV on disk (pre-stamped SUCCESS)
 
-rowReader() / rowProcessor() returns RowResult.Failure
+rowReader() returns RowResult.Failure
     └── collector.recordError(rowNumber, error)
             errors: HashMap<Int, String>   ← in-memory only
+
+rowProcessor() returns RowResult.Success(extras)
+    └── collector.recordExtra(rowNumber, extras)
+            rowExtras: HashMap<Int, ExtraColumns>  ← in-memory only
+
+rowProcessor() returns RowResult.Failure
+    └── collector.recordError(rowNumber, error)
 
 RowSkipListener.onSkipInWrite(row, t)
     └── collector.recordError(row.rowNumber, t.message)
@@ -511,21 +585,20 @@ RowSkipListener.onSkipInWrite(row, t)
 
 | Condition | Passes | Notes |
 |---|---|---|
-| CSV, zero errors | 1 | Inline file is already the result — returned as-is |
-| CSV, errors present | 2 | Reads inline CSV, rewrites with corrected `status`/`failure-reason` |
+| CSV, zero errors, zero extras | 1 | Inline file is moved to result path — no rewrite |
+| CSV, errors or extras present | 2 | Reads inline CSV, rewrites with corrected `status`/`failure-reason`/extra columns |
 | XLSX | 2 always | Reads inline CSV, converts to XLSX via `SXSSFWorkbook` (100-row sliding window) |
 
-Only error messages are held in memory — the full file content is always on disk.
+Only error messages and extra column values are held in memory — the full file content is always on disk.
 
 ### Startup Cleanup
 
 `BulkTempFileCleanupRunner` runs once at startup (`ApplicationRunner`). It scans the system temp directory and deletes:
 - Files matching `bulk-inline-*` (inline working files)
-- Files matching `bulk-*-result-*` (result files)
 
 …that are older than 24 hours (configurable by overriding the `bulkTempFileCleanupRunner` bean).
 
-This recovers disk space left by temp files from a previous JVM crash or ungraceful shutdown.
+This recovers disk space left by temp files from a previous JVM crash or ungraceful shutdown. Result files are written to a structured directory (not the system temp dir) and are not cleaned up automatically.
 
 ### Thread Model
 
