@@ -13,6 +13,7 @@ import kotlin.jvm.optionals.getOrNull
 
 class MysqlDbStoreCacheService(
     private val repository: MysqlDbStoreCacheRepository,
+    private val objectMapper: ObjectMapper,
 ) : DbStoreService {
     companion object {
         private val LOGGER = LoggerFactory.getLogger(MysqlDbStoreCacheService::class.java)
@@ -23,7 +24,6 @@ class MysqlDbStoreCacheService(
         LOGGER.info("MysqlDbStoreCacheService initialized!")
     }
 
-    private val objectMapper = ObjectMapper().findAndRegisterModules()
     override fun save(
         cacheKey: String,
         value: Any,
@@ -48,4 +48,7 @@ class MysqlDbStoreCacheService(
         repository.deleteById(key)
     }
 
+    override fun deleteAllByPrefix(prefix: String) {
+        repository.deleteAllByCacheKeyStartingWith(prefix)
+    }
 }

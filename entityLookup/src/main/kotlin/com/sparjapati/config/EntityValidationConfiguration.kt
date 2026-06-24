@@ -1,12 +1,10 @@
 package com.sparjapati.config
 
-import com.sparjapati.annotation.EnableEntityValidation
 import com.sparjapati.service.EntityLookupRegistry
 import com.sparjapati.aspect.EntityValidationAspect
 import com.sparjapati.service.EntityLookupService
 import com.sparjapati.service.EntityValidationCache
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
@@ -14,8 +12,8 @@ import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.web.context.WebApplicationContext
 
+// Loaded exclusively via @Import from @EnableEntityValidation — no @ConditionalOnBean needed.
 @Configuration
-@ConditionalOnBean(annotation = [EnableEntityValidation::class])
 @EnableAspectJAutoProxy(proxyTargetClass = true)
 class EntityValidationConfiguration {
     companion object {

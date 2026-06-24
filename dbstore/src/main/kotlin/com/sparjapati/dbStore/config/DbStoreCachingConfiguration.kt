@@ -7,32 +7,33 @@ import com.sparjapati.dbStore.aspect.DbStoreCacheableAspect
 import com.sparjapati.dbStore.mysqlDbstore.repository.MysqlDbStoreCacheRepository
 import com.sparjapati.dbStore.mysqlDbstore.service.MysqlDbStoreCacheService
 import com.sparjapati.dbStore.service.DbStoreCacheSupport
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import jakarta.persistence.EntityManager
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
-import com.sparjapati.dbStore.annotation.EnableDbStoreCaching
 import com.sparjapati.dbStore.service.DbStoreService
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories
+import org.springframework.data.jpa.repository.support.JpaRepositoryFactory
 
+// Loaded exclusively via @Import from @EnableDbStoreCaching — no @ConditionalOnBean needed.
 @Configuration
-@ConditionalOnBean(annotation = [EnableDbStoreCaching::class])
 @EnableAspectJAutoProxy(proxyTargetClass = true)
-@EnableJpaRepositories(
-    basePackageClasses = [MysqlDbStoreCacheRepository::class]
-)
 class DbStoreCachingConfiguration {
-    companion object {
-        private val objectMapper = ObjectMapper().findAndRegisterModules()
-    }
+
+    @Bean
+    fun mysqlDbStoreCacheRepository(entityManager: EntityManager): MysqlDbStoreCacheRepository =
+        JpaRepositoryFactory(entityManager).getRepository(MysqlDbStoreCacheRepository::class.java)
 
     @Bean
     fun dbStoreService(
         repository: MysqlDbStoreCacheRepository,
-    ): DbStoreService = MysqlDbStoreCacheService(repository)
+        objectMapper: ObjectMapper,
+    ): DbStoreService = MysqlDbStoreCacheService(repository, objectMapper)
 
     @Bean
-    fun dbStoreCacheSupport(dbStoreService: DbStoreService) = DbStoreCacheSupport(dbStoreService, objectMapper)
+    fun dbStoreCacheSupport(
+        dbStoreService: DbStoreService,
+        objectMapper: ObjectMapper,
+    ) = DbStoreCacheSupport(dbStoreService, objectMapper)
 
     @Bean
     fun dbStoreCacheableAspect(cacheSupport: DbStoreCacheSupport): DbStoreCacheableAspect {

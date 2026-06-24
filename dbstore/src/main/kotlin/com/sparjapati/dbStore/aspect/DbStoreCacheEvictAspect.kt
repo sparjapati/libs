@@ -13,15 +13,18 @@ class DbStoreCacheEvictAspect(
 
     @Around("@annotation(cacheEvict)")
     fun around(pjp: ProceedingJoinPoint, cacheEvict: DbStoreCacheEvict): Any? {
-
-        val key = cacheSupport.buildCacheKey(
-            pjp,
-            cacheEvict.cacheName,
-            cacheEvict.key
-        )
-
         val result = pjp.proceed()
-        cacheSupport.delete(key)
+
+        if (cacheEvict.allEntries) {
+            require(cacheEvict.cacheName.isNotBlank()) {
+                "@DbStoreCacheEvict: cacheName must be set when allEntries = true"
+            }
+            cacheSupport.deleteAllByPrefix(cacheEvict.cacheName)
+        } else {
+            val key = cacheSupport.buildCacheKey(pjp, cacheEvict.cacheName, cacheEvict.key)
+            cacheSupport.delete(key)
+        }
+
         return result
     }
 }

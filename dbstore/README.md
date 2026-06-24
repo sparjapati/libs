@@ -113,7 +113,9 @@ fun updateUserProfile(profile: UserProfile): UserProfile {
 
 ### @DbStoreCacheEvict
 
-Invalidation: execute the method, then delete the cache entry.
+Invalidation: execute the method, then delete the cache entry (or all entries for a cache name).
+
+**Single-key eviction:**
 
 ```kotlin
 @DbStoreCacheEvict(cacheName = "userProfile", key = "#userId")
@@ -122,12 +124,24 @@ fun deleteUserProfile(userId: String) {
 }
 ```
 
-- The method always runs first; the cache entry is deleted afterward.
+**Bulk eviction** — delete all entries whose keys start with `cacheName`:
+
+```kotlin
+@DbStoreCacheEvict(cacheName = "userProfile", allEntries = true)
+fun clearUserProfileCache() {
+    // all keys starting with "userProfile" are deleted
+}
+```
+
+- The method always runs first; the cache entry (or entries) are deleted afterward.
+- `allEntries = true` requires `cacheName` to be set; `key` is ignored.
+- Bulk eviction deletes all keys with the prefix `{cacheName}`, covering both `userProfile` (no-key entries) and `userProfile::*` (keyed entries).
 
 | Parameter | Required | Description |
 |---|---|---|
-| `cacheName` | Yes (if `key` is blank) | Prefix for the cache key |
-| `key` | Yes (if `cacheName` is blank) | SpEL expression |
+| `cacheName` | Yes (if `key` is blank, or if `allEntries = true`) | Prefix for the cache key |
+| `key` | Yes (if `cacheName` is blank and `allEntries = false`) | SpEL expression |
+| `allEntries` | No (default: `false`) | When `true`, deletes all keys starting with `cacheName` |
 
 ---
 
@@ -209,14 +223,8 @@ No beans are registered unless `@EnableDbStoreCaching` is present.
 
 ### Serialization
 
-Values are serialized to JSON using a shared `ObjectMapper` with all Jackson modules registered (`findAndRegisterModules()`). On retrieval, the value is deserialized back to the method's declared return type, including parameterized generics (e.g. `List<UserProfile>` is reconstructed correctly via `signature.method.genericReturnType`).
+Values are serialized to JSON using the `ObjectMapper` bean from the Spring context. Both `MysqlDbStoreCacheService` (write path) and `DbStoreCacheSupport` (read path) receive the same bean, so custom serializers and modules registered on it apply consistently. On retrieval, the value is deserialized back to the method's declared return type, including parameterized generics (e.g. `List<UserProfile>` is reconstructed correctly via `signature.method.genericReturnType`).
 
 ### Thread safety
 
 `@DbStoreCacheable` uses double-checked locking (`synchronized(key.intern())`) to ensure only one thread executes the method on a cache miss for the same key. `@DbStoreCachePut` and `@DbStoreCacheEvict` always run the method and do not require this guard.
-
-### Limitations
-
-- The library uses a single shared `ObjectMapper` — configure it via `findAndRegisterModules()` at startup, not per-request.
-- Cache entries with the same `cacheKey` are overwritten on `@DbStoreCachePut`, not versioned.
-- Bulk eviction (e.g. evict all keys for a `cacheName`) is not supported via annotations — use `DbStoreService` directly with a query.

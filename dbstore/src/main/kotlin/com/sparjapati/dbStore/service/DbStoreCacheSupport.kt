@@ -70,6 +70,10 @@ class DbStoreCacheSupport(
         dbStoreService.delete(key)
     }
 
+    fun deleteAllByPrefix(prefix: String) {
+        dbStoreService.deleteAllByPrefix(prefix)
+    }
+
     fun deserialize(
         pjp: ProceedingJoinPoint,
         cachedValue: String,
