@@ -29,7 +29,7 @@ class BulkTempFileCleanupRunner(
     companion object {
         private val LOGGER = LoggerFactory.getLogger(BulkTempFileCleanupRunner::class.java)
 
-        /** Prefix used by [RowResultCollector] for inline working files in the system temp directory. */
+        /** Prefix used by [RowAccumulator] for inline working files in the system temp directory. */
         const val PREFIX_INLINE = "bulk-inline-"
     }
 

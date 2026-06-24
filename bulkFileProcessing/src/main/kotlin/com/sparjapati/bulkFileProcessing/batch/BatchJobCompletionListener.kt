@@ -9,16 +9,16 @@ import org.springframework.batch.core.listener.JobExecutionListener
 /**
  * Fires after every bulk file processing job finishes, regardless of outcome.
  *
- * Writes the annotated result file via [RowResultCollector], then calls
+ * Writes the annotated result file via [ResultFileWriter], then calls
  * [BulkJobCompletionHandler.onJobCompleted] if a handler was registered for this job's
  * processor type. The handler is resolved once at job creation time by
  * [FileProcessingJobFactory] and passed in directly — this listener has no registry dependency.
  *
- * @param collector the per-job [RowResultCollector] that accumulated rows and errors.
- * @param handler   the completion handler for this processor type, or `null` if none registered.
+ * @param writer  the per-job [ResultFileWriter] that produces the annotated output file.
+ * @param handler the completion handler for this processor type, or `null` if none registered.
  */
 class BatchJobCompletionListener(
-    private val collector: RowResultCollector,
+    private val writer: ResultFileWriter,
     private val handler: BulkJobCompletionHandler?,
 ) : JobExecutionListener {
 
@@ -35,7 +35,7 @@ class BatchJobCompletionListener(
         val writeCount = jobExecution.stepExecutions.sumOf { it.writeCount }
         val skipCount = jobExecution.stepExecutions.sumOf { it.skipCount }
 
-        val resultFilePath = collector.writeResultFile()
+        val resultFilePath = writer.write()
 
         if (handler == null) {
             LOGGER.debug("No BulkJobCompletionHandler registered for processorType={} jobId={}", processorType, jobId)

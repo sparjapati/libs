@@ -55,7 +55,7 @@ BatchJobService.launch(file, processorType, jobId)
                │               └── RowResult.Success(extras) → extra columns appended to result row
                │
                └── BatchJobCompletionListener.afterJob()
-                       ├── RowResultCollector.writeResultFile()  ← produces annotated output
+                       ├── ResultFileWriter.write()  ← produces annotated output
                        └── BulkJobCompletionHandler.onJobCompleted(result)  ← if registered
 ```
 
@@ -88,20 +88,21 @@ Called once per upload. Produces a uniquely named `Job` and `Step` so concurrent
 
 Wires together:
 - `SpreadsheetItemReader` — reads rows from the source file
-- `RowResultCollector` — collects every row and any errors during the job
+- `RowAccumulator` — collects every row and any errors during the job
+- `ResultFileWriter` — writes the annotated result file after the job
 - A combined writer lambda — calls `rowReader()` then `rowProcessor()`
 - `RowSkipListener` — records system-level exceptions (DB failures, etc.) as row errors
 - `BatchJobCompletionListener` — fires after the job finishes
 
-### 3. `SpreadsheetItemReader` → `RowResultCollector` — reading
+### 3. `SpreadsheetItemReader` → `RowAccumulator` — reading
 
 Spring Batch calls `reader.read()` once per row. Internally delegates to either `CsvSpreadsheetReader` or `XlsxSpreadsheetReader` based on file extension.
 
-Every row is immediately passed to `RowResultCollector.recordRow(row)`:
+Every row is immediately passed to `RowAccumulator.recordRow(row)`:
 
 ```
 SpreadsheetItemReader.read()
-    └── collector.recordRow(row)
+    └── accumulator.recordRow(row)
             └── writes row to an inline temp CSV file, pre-stamped SUCCESS
 ```
 
@@ -118,7 +119,7 @@ writer.write(chunk: List<SpreadsheetRow>)
     │       returns Map<SpreadsheetRow, RowResult<T>>
     │       │
     │       ├── RowResult.Failure(error)
-    │       │       └── collector.recordError(row.rowNumber, error)
+    │       │       └── accumulator.recordError(row.rowNumber, error)
     │       │               held in memory: errors: HashMap<Int, String>
     │       │
     │       └── RowResult.Success(domainObject)
@@ -128,17 +129,17 @@ writer.write(chunk: List<SpreadsheetRow>)
             returns Map<SpreadsheetRow, RowResult<ExtraColumns>>
             │
             ├── RowResult.Failure(error)
-            │       └── collector.recordError(row.rowNumber, error)
+            │       └── accumulator.recordError(row.rowNumber, error)
             │
             └── RowResult.Success(extras)
-                    └── collector.recordExtra(row.rowNumber, extras)
+                    └── accumulator.recordExtra(row.rowNumber, extras)
                             extras appended as additional columns in the result file
 ```
 
 If either `rowReader` or `rowProcessor` **throws** (a system error, not a business error):
 - Spring Batch rolls back the chunk transaction
 - Retries each row individually (single-row chunks)
-- If the single-row call still throws → `RowSkipListener.onSkipInWrite(row, t)` → `collector.recordError(row.rowNumber, error)`
+- If the single-row call still throws → `RowSkipListener.onSkipInWrite(row, t)` → `accumulator.recordError(row.rowNumber, error)`
 
 ### 5. `BatchJobCompletionListener.afterJob()` — post-job
 
@@ -147,7 +148,7 @@ Fires after every job, success or failure.
 ```
 afterJob(jobExecution)
     │
-    ├── collector.writeResultFile()
+    ├── writer.write()
     │       │
     │       ├── [CSV, no errors, no extras] — fast path: inline file moved to result path (0 extra passes)
     │       │
@@ -161,16 +162,18 @@ afterJob(jobExecution)
     └── BulkJobCompletionHandler.onJobCompleted(result)  ← if a handler is registered for this processorType
 ```
 
-### 6. `RowResultCollector` — result file generation
+### 6. `RowAccumulator` + `ResultFileWriter` — data collection and result file generation
 
-Holds three pieces of state:
+**`RowAccumulator`** holds three pieces of state during the job:
 - `inlineFile` — temp CSV on disk written during reading (every row pre-stamped SUCCESS)
 - `errors: HashMap<Int, String>` — rowNumber → error message (in-memory only)
 - `rowExtras: HashMap<Int, ExtraColumns>` — rowNumber → extra column values (in-memory only)
 
+**`ResultFileWriter`** consumes the accumulator after the job to write the output:
+
 Result file location: `{resultBaseDir}/{processorType}/{date}/result-{originalFileName}.{ext}`
 
-At `writeResultFile()`:
+At `write()`:
 - If no errors, no extras, and CSV: moves the inline file to the result path directly (single pass total — no rewrite)
 - Otherwise: reads the inline file row-by-row, checks each row number against the error map and extras map, writes annotated output file with `status` / `failure-reason` / extra columns
 
@@ -180,10 +183,11 @@ At `writeResultFile()`:
 |---|---|
 | `BatchJobService` | Entry point — validates processor, builds job params, executes job |
 | `FileProcessingJobFactory` | Assembles Job + Step per upload; wires reader, writer, listener |
-| `SpreadsheetItemReader` | Delegates to CSV or XLSX reader; feeds rows to the collector |
+| `SpreadsheetItemReader` | Delegates to CSV or XLSX reader; feeds rows to the accumulator |
 | `CsvSpreadsheetReader` | Streams CSV rows via Apache Commons CSV |
 | `XlsxSpreadsheetReader` | Streams XLSX rows via Apache POI SAX (no DOM loading) |
-| `RowResultCollector` | Writes every row to an inline temp file; holds error and extras maps; produces result file |
+| `RowAccumulator` | Job-time data collection — streams rows to an inline temp file; holds error and extras maps in memory |
+| `ResultFileWriter` | Post-job file production — reads inline file, merges errors/extras, writes annotated CSV or XLSX output |
 | `FileProcessor<T>` | **You implement this** — `rowReader()` transforms, `rowProcessor()` persists |
 | `RowResult<T>` | Return type for both methods — `Success(value)` or `Failure(error)`; `ExtraColumns` variant used by `rowProcessor` |
 | `ExtraColumns` | Typealias for `Map<String, String>` — extra columns appended to each result row by `rowProcessor` |
@@ -559,29 +563,29 @@ There is **no separate processor phase** — `rowReader()` (transform) and `rowP
 
 ### Error Collection and Result File
 
-`RowResultCollector` coordinates between the reading phase and the final result file:
+`RowAccumulator` collects data during the job; `ResultFileWriter` produces the output file after it.
 
-**During the job:**
+**During the job (`RowAccumulator`):**
 ```
-reader.read() → collector.recordRow(row)
+reader.read() → accumulator.recordRow(row)
     └── streams row to inline temp CSV on disk (pre-stamped SUCCESS)
 
 rowReader() returns RowResult.Failure
-    └── collector.recordError(rowNumber, error)
+    └── accumulator.recordError(rowNumber, error)
             errors: HashMap<Int, String>   ← in-memory only
 
 rowProcessor() returns RowResult.Success(extras)
-    └── collector.recordExtra(rowNumber, extras)
+    └── accumulator.recordExtra(rowNumber, extras)
             rowExtras: HashMap<Int, ExtraColumns>  ← in-memory only
 
 rowProcessor() returns RowResult.Failure
-    └── collector.recordError(rowNumber, error)
+    └── accumulator.recordError(rowNumber, error)
 
 RowSkipListener.onSkipInWrite(row, t)
-    └── collector.recordError(row.rowNumber, t.message)
+    └── accumulator.recordError(row.rowNumber, t.message)
 ```
 
-**After the job (`writeResultFile()`):**
+**After the job (`ResultFileWriter.write()`):**
 
 | Condition | Passes | Notes |
 |---|---|---|
@@ -613,7 +617,7 @@ Your executor thread
     ├── batchJobService.launch(sourceFile, processorType, jobId)  ← blocks here
     │     ├── Spring Batch job executes (read → transform → persist, chunk by chunk)
     │     ├── BatchJobCompletionListener.afterJob()
-    │     │     ├── RowResultCollector.writeResultFile()
+    │     │     ├── ResultFileWriter.write()
     │     │     └── BulkJobCompletionHandler.onJobCompleted(result)
     │     └── returns (job is done)
     └── thread released; caller deletes tempFile in finally block

@@ -20,7 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager
  * in the [JobRepository].
  *
  * The step is configured with a skip limit from [FileProcessor.skipLimit] (default: unlimited).
- * Each skipped row's error is recorded in [RowResultCollector] and written to the result
+ * Each skipped row's error is recorded in [RowAccumulator] and written to the result
  * file by [BatchJobCompletionListener] after the job finishes.
  *
  * Registered only when [@EnableBulkFileProcessing][com.sparjapati.bulkFileProcessing.config.EnableBulkFileProcessing]
@@ -59,16 +59,18 @@ class FileProcessingJobFactory(
         originalFileName: String,
     ): Job {
         val typedProcessor = processor as FileProcessor<Any>
-        val collector = RowResultCollector(
+        val accumulator = RowAccumulator()
+        val fileWriter = ResultFileWriter(
+            accumulator = accumulator,
             fileType = fileType,
             processorType = processor.processorType,
             originalFileName = originalFileName,
             resultBaseDir = resultBaseDir,
             declaredExtraColumns = processor.extraColumns,
         )
-        val reader = SpreadsheetItemReader(filePath = filePath, fileType = fileType, collector = collector)
+        val reader = SpreadsheetItemReader(filePath = filePath, fileType = fileType, accumulator = accumulator)
         val jobListener = BatchJobCompletionListener(
-            collector = collector,
+            writer = fileWriter,
             handler = handlerRegistry.find(processor.processorType),
         )
 
@@ -88,7 +90,7 @@ class FileProcessingJobFactory(
                 for ((row, result) in readerResults) {
                     when (result) {
                         is RowResult.Success -> successMap[row] = result.value
-                        is RowResult.Failure -> collector.recordError(rowNumber = row.rowNumber, error = result.error)
+                        is RowResult.Failure -> accumulator.recordError(rowNumber = row.rowNumber, error = result.error)
                     }
                 }
 
@@ -96,8 +98,8 @@ class FileProcessingJobFactory(
                     val processorResults = rowProcessor(successMap)
                     for ((row, result) in processorResults) {
                         when (result) {
-                            is RowResult.Success -> collector.recordExtra(rowNumber = row.rowNumber, extra = result.value)
-                            is RowResult.Failure -> collector.recordError(rowNumber = row.rowNumber, error = result.error)
+                            is RowResult.Success -> accumulator.recordExtra(rowNumber = row.rowNumber, extra = result.value)
+                            is RowResult.Failure -> accumulator.recordError(rowNumber = row.rowNumber, error = result.error)
                         }
                     }
                 }
@@ -105,7 +107,7 @@ class FileProcessingJobFactory(
             .faultTolerant()
             .skip(Exception::class.java)
             .skipLimit(typedProcessor.skipLimit)
-            .skipListener(RowSkipListener(jobId = jobId, collector = collector))
+            .skipListener(RowSkipListener(jobId = jobId, accumulator = accumulator))
             .build()
 
         return JobBuilder("job-$jobId", jobRepository)
@@ -116,15 +118,15 @@ class FileProcessingJobFactory(
 }
 
 /**
- * Records per-row errors into [RowResultCollector] when Spring Batch skips a row
+ * Records per-row errors into [RowAccumulator] when Spring Batch skips a row
  * due to an exception during processing or writing.
  *
- * @param jobId     used as a correlation key in warning log messages.
- * @param collector the shared [RowResultCollector] for this job run.
+ * @param jobId       used as a correlation key in warning log messages.
+ * @param accumulator the shared [RowAccumulator] for this job run.
  */
 private class RowSkipListener(
     private val jobId: String,
-    private val collector: RowResultCollector,
+    private val accumulator: RowAccumulator,
 ) : SkipListener<SpreadsheetRow, SpreadsheetRow> {
 
     companion object {
@@ -140,6 +142,6 @@ private class RowSkipListener(
     override fun onSkipInWrite(item: SpreadsheetRow, t: Throwable) {
         val error = t.message ?: t::class.simpleName ?: "unknown error"
         LOGGER.warn("jobId={} — row #{} skipped on write: {}", jobId, item.rowNumber, error)
-        collector.recordError(rowNumber = item.rowNumber, error = error)
+        accumulator.recordError(rowNumber = item.rowNumber, error = error)
     }
 }
