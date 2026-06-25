@@ -219,9 +219,23 @@ Implement this interface and register the implementation as a Spring bean to rec
 
 No beans are registered unless `@EnableEntityIndexing` is present.
 
-### Transaction safety
+### Transaction safety and aspect ordering
 
-`ReindexContextAspect` checks `TransactionSynchronizationManager.isActualTransactionActive()` before publishing. If a transaction is active, the event is deferred to `afterCommit()` via `TransactionSynchronization`. If the transaction rolls back, the hook is never called and no reindex occurs.
+`ReindexContextAspect` is annotated with `@Order(Ordered.LOWEST_PRECEDENCE - 1)`, placing it **just outside** Spring's `@Transactional` interceptor (which defaults to `Ordered.LOWEST_PRECEDENCE`). This makes the ordering deterministic regardless of bean registration order.
+
+Because `ReindexContextAspect` is the outer wrapper, what `isActualTransactionActive()` returns in the `finally` block depends on the call context:
+
+| Situation | `isActualTransactionActive()` in `finally` | Path taken |
+|---|---|---|
+| `@ReindexContext` + `@Transactional` on the same method | `false` — own transaction already committed | event published immediately |
+| Method called from within an outer `@Transactional` | `true` — caller's transaction still open | event deferred to `afterCommit()` |
+| `@ReindexContext` only, no transaction | `false` | event published immediately |
+
+In all cases the event only reaches the listener after the relevant transaction has committed — either because it already committed before the `finally` block ran, or because the `afterCommit` hook waits for the outer commit.
+
+If the transaction rolls back, `completed` is `false` (the exception propagated through `pjp.proceed()`) and the event is never published.
+
+> **Note:** the order of `@Transactional` and `@ReindexContext` on a method declaration has no effect on AOP execution order — only the `@Order` value on the aspect class matters.
 
 ### ID deduplication
 

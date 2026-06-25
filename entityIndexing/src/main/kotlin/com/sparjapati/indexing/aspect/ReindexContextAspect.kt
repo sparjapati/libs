@@ -7,10 +7,17 @@ import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
+// Ordered just outside @Transactional (LOWEST_PRECEDENCE) so this aspect always wraps the
+// transaction boundary. When the finally block runs, an active transaction means we are inside
+// an outer caller's transaction → use afterCommit. No active transaction means the method's
+// own transaction already committed → publish immediately.
 @Aspect
+@Order(Ordered.LOWEST_PRECEDENCE - 1)
 class ReindexContextAspect(private val publisher: ApplicationEventPublisher) {
 
     private val log = LoggerFactory.getLogger(javaClass)
