@@ -2,21 +2,29 @@ package com.dbStore.aspect
 
 import com.dbStore.annotation.DbStoreCacheEvict
 import com.dbStore.service.DbStoreCacheSupport
-import org.aspectj.lang.ProceedingJoinPoint
-import org.aspectj.lang.annotation.Around
-import org.aspectj.lang.annotation.Aspect
+import org.aopalliance.intercept.MethodInterceptor
+import org.aopalliance.intercept.MethodInvocation
 import org.slf4j.LoggerFactory
+import org.springframework.core.annotation.AnnotationUtils
+import java.lang.reflect.Method
+import java.util.Optional
+import java.util.concurrent.ConcurrentHashMap
 
-@Aspect
 class DbStoreCacheEvictAspect(
-    private val cacheSupport: DbStoreCacheSupport
-) {
+    private val cacheSupport: DbStoreCacheSupport,
+) : MethodInterceptor {
 
     private val log = LoggerFactory.getLogger(javaClass)
+    private val annotationCache = ConcurrentHashMap<Method, Optional<DbStoreCacheEvict>>()
 
-    @Around("@annotation(cacheEvict)")
-    fun around(pjp: ProceedingJoinPoint, cacheEvict: DbStoreCacheEvict): Any? {
-        val result = pjp.proceed()
+    @Suppress("UNCHECKED_CAST")
+    override fun invoke(invocation: MethodInvocation): Any? {
+        val method = invocation.method
+        val cacheEvict = annotationCache.getOrPut(method) {
+            Optional.ofNullable(AnnotationUtils.findAnnotation(method, DbStoreCacheEvict::class.java))
+        }.orElse(null) ?: return invocation.proceed()
+
+        val result = invocation.proceed()
 
         if (cacheEvict.allEntries) {
             require(cacheEvict.cacheName.isNotBlank()) {
@@ -25,7 +33,13 @@ class DbStoreCacheEvictAspect(
             log.info("@DbStoreCacheEvict evicting all entries for cacheName={}", cacheEvict.cacheName)
             cacheSupport.deleteAllByPrefix(cacheEvict.cacheName)
         } else {
-            val key = cacheSupport.buildCacheKey(pjp, cacheEvict.cacheName, cacheEvict.key)
+            val args = invocation.arguments as Array<Any?>
+            val key = cacheSupport.buildCacheKey(
+                method = method,
+                args = args,
+                cacheName = cacheEvict.cacheName,
+                keyExpression = cacheEvict.key,
+            )
             log.debug("@DbStoreCacheEvict evicting key={}", key)
             cacheSupport.delete(key)
         }

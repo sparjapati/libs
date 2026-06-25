@@ -4,28 +4,25 @@ import com.service.EntityLookupRegistry
 import com.service.EntityValidationCache
 import com.annotation.Entity
 import com.exception.EntityNotFoundException
-import org.aspectj.lang.ProceedingJoinPoint
-import org.aspectj.lang.annotation.Around
-import org.aspectj.lang.annotation.Aspect
-import org.aspectj.lang.reflect.MethodSignature
+import org.aopalliance.intercept.MethodInterceptor
+import org.aopalliance.intercept.MethodInvocation
 import org.slf4j.LoggerFactory
 
-@Aspect
 class EntityValidationAspect(
     private val entityLookupRegistry: EntityLookupRegistry,
-    private val entityValidationCache: EntityValidationCache
-) {
+    private val entityValidationCache: EntityValidationCache,
+) : MethodInterceptor {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Around("within(@org.springframework.web.bind.annotation.RestController *)")
-    fun validateEntity(joinPoint: ProceedingJoinPoint): Any? {
-        val method = (joinPoint.signature as MethodSignature).method
-        val args = joinPoint.args
+    @Suppress("UNCHECKED_CAST")
+    override fun invoke(invocation: MethodInvocation): Any? {
+        val method = invocation.method
+        val args = invocation.arguments as Array<Any?>
 
         method.parameters.forEachIndexed { idx, param ->
             val annotation = param.getAnnotation(Entity::class.java) ?: return@forEachIndexed
-            val idValue = args[idx]
+            val idValue = args[idx] ?: return@forEachIndexed
             val entityName = annotation.name.uppercase()
             val cacheKey = "${entityName}:${idValue}"
 
@@ -53,6 +50,6 @@ class EntityValidationAspect(
             }
             log.debug("Entity validation: validated entity={} id={}", entityName, idValue)
         }
-        return joinPoint.proceed()
+        return invocation.proceed()
     }
 }

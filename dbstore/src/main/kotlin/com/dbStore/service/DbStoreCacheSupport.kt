@@ -1,11 +1,10 @@
 package com.dbStore.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.aspectj.lang.ProceedingJoinPoint
-import org.aspectj.lang.reflect.MethodSignature
 import org.slf4j.LoggerFactory
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext
+import java.lang.reflect.Method
 import java.time.LocalDateTime
 
 class DbStoreCacheSupport(
@@ -17,7 +16,8 @@ class DbStoreCacheSupport(
     private val parser = SpelExpressionParser()
 
     fun buildCacheKey(
-        pjp: ProceedingJoinPoint,
+        method: Method,
+        args: Array<Any?>,
         cacheName: String,
         keyExpression: String,
     ): String {
@@ -26,9 +26,8 @@ class DbStoreCacheSupport(
         }
 
         val context = StandardEvaluationContext()
-        val signature = pjp.signature as MethodSignature
-        signature.parameterNames.forEachIndexed { index, name ->
-            context.setVariable(name, pjp.args[index])
+        method.parameters.forEachIndexed { index, param ->
+            context.setVariable(param.name, args[index])
         }
 
         val key = if (keyExpression.isNotBlank()) {
@@ -84,13 +83,8 @@ class DbStoreCacheSupport(
         dbStoreService.deleteAllByPrefix(prefix)
     }
 
-    fun deserialize(
-        pjp: ProceedingJoinPoint,
-        cachedValue: String,
-    ): Any {
-        val signature = pjp.signature as MethodSignature
-        val javaType = objectMapper.typeFactory
-            .constructType(signature.method.genericReturnType)
+    fun deserialize(method: Method, cachedValue: String): Any {
+        val javaType = objectMapper.typeFactory.constructType(method.genericReturnType)
         return objectMapper.readValue(cachedValue, javaType)
     }
 }

@@ -2,45 +2,50 @@ package com.dbStore.aspect
 
 import com.dbStore.annotation.DbStoreCacheable
 import com.dbStore.service.DbStoreCacheSupport
-import org.aspectj.lang.ProceedingJoinPoint
-import org.aspectj.lang.annotation.Around
-import org.aspectj.lang.annotation.Aspect
+import org.aopalliance.intercept.MethodInterceptor
+import org.aopalliance.intercept.MethodInvocation
 import org.slf4j.LoggerFactory
+import org.springframework.core.annotation.AnnotationUtils
+import java.lang.reflect.Method
+import java.util.Optional
+import java.util.concurrent.ConcurrentHashMap
 
-@Aspect
 class DbStoreCacheableAspect(
     private val cacheSupport: DbStoreCacheSupport,
-) {
+) : MethodInterceptor {
 
     private val log = LoggerFactory.getLogger(javaClass)
+    private val annotationCache = ConcurrentHashMap<Method, Optional<DbStoreCacheable>>()
 
-    @Around("@annotation(cacheable)")
-    fun around(pjp: ProceedingJoinPoint, cacheable: DbStoreCacheable): Any? {
+    @Suppress("UNCHECKED_CAST")
+    override fun invoke(invocation: MethodInvocation): Any? {
+        val method = invocation.method
+        val cacheable = annotationCache.getOrPut(method) {
+            Optional.ofNullable(AnnotationUtils.findAnnotation(method, DbStoreCacheable::class.java))
+        }.orElse(null) ?: return invocation.proceed()
 
+        val args = invocation.arguments as Array<Any?>
         val key = cacheSupport.buildCacheKey(
-            pjp,
-            cacheable.cacheName,
-            cacheable.key
+            method = method,
+            args = args,
+            cacheName = cacheable.cacheName,
+            keyExpression = cacheable.key,
         )
 
         cacheSupport.getFromCache(key)?.let {
-            return cacheSupport.deserialize(pjp, it)
+            return cacheSupport.deserialize(method, it)
         }
 
         synchronized(key.intern()) {
             log.debug("@DbStoreCacheable acquiring lock key={}", key)
             cacheSupport.getFromCache(key)?.let {
                 log.debug("@DbStoreCacheable cache hit after lock key={}", key)
-                return cacheSupport.deserialize(pjp, it)
+                return cacheSupport.deserialize(method, it)
             }
 
-            val result = pjp.proceed()
+            val result = invocation.proceed()
             if (result != null) {
-                cacheSupport.saveToCache(
-                    key,
-                    result,
-                    cacheable.ttlSeconds
-                )
+                cacheSupport.saveToCache(key = key, value = result, ttlSeconds = cacheable.ttlSeconds)
             } else {
                 log.debug("@DbStoreCacheable method returned null, skipping cache write key={}", key)
             }
