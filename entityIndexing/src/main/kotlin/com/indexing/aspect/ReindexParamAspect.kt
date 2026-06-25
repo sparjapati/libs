@@ -2,18 +2,15 @@ package com.indexing.aspect
 
 import com.indexing.annotation.ReindexId
 import com.indexing.context.ReindexContextHolder
-import org.aspectj.lang.JoinPoint
-import org.aspectj.lang.annotation.AfterReturning
-import org.aspectj.lang.annotation.Aspect
-import org.aspectj.lang.reflect.MethodSignature
+import org.aopalliance.intercept.MethodInterceptor
+import org.aopalliance.intercept.MethodInvocation
 import org.slf4j.LoggerFactory
 import org.springframework.core.annotation.AnnotationUtils
 import java.lang.reflect.Method
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
-@Aspect
-class ReindexParamAspect {
+class ReindexParamAspect : MethodInterceptor {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -23,13 +20,15 @@ class ReindexParamAspect {
     private val methodAnnotationCache = ConcurrentHashMap<Method, Optional<ReindexId>>()
     private val paramAnnotationCache  = ConcurrentHashMap<Pair<Method, Int>, Optional<ReindexId>>()
 
-    @AfterReturning(
-        pointcut  = "execution(* *(..)) && !within(com.indexing..*)",
-        returning = "returnValue",
-    )
-    fun collect(joinPoint: JoinPoint, returnValue: Any?) {
-        val method = (joinPoint.signature as MethodSignature).method
+    // Equivalent to @AfterReturning: collection is skipped if proceed() throws.
+    override fun invoke(invocation: MethodInvocation): Any? {
+        val result = invocation.proceed()
+        @Suppress("UNCHECKED_CAST")
+        collect(method = invocation.method, args = invocation.arguments as Array<Any?>, returnValue = result)
+        return result
+    }
 
+    private fun collect(method: Method, args: Array<Any?>, returnValue: Any?) {
         if (!ReindexContextHolder.isActive()) {
             if (log.isDebugEnabled) {
                 val ignored = mutableMapOf<String, MutableList<String>>()
@@ -44,7 +43,7 @@ class ReindexParamAspect {
                     paramAnnotationCache.getOrPut(method to index) {
                         Optional.ofNullable(findParamAnnotation(method, index))
                     }.orElse(null)?.let { annotation ->
-                        toIds(joinPoint.args[index])?.let { ids ->
+                        toIds(args[index])?.let { ids ->
                             ignored.getOrPut(annotation.entity.simpleName ?: "?") { mutableListOf() }.addAll(ids)
                         }
                     }
@@ -61,7 +60,7 @@ class ReindexParamAspect {
         }
 
         collectFromReturnValue(method, returnValue)
-        collectFromParameters(method, joinPoint.args)
+        collectFromParameters(method, args)
     }
 
     // --- return-value collection ---

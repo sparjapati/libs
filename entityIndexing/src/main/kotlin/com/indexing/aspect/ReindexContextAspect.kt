@@ -6,14 +6,10 @@ import com.indexing.context.ReindexContextHolder
 import com.indexing.listener.EntityIndexListenerRegistry
 import com.indexing.service.ReindexService
 import com.indexing.sink.IndexSink
-import org.aspectj.lang.ProceedingJoinPoint
-import org.aspectj.lang.annotation.Around
-import org.aspectj.lang.annotation.Aspect
-import org.aspectj.lang.reflect.MethodSignature
+import org.aopalliance.intercept.MethodInterceptor
+import org.aopalliance.intercept.MethodInvocation
 import org.slf4j.LoggerFactory
-import org.springframework.core.Ordered
 import org.springframework.core.annotation.AnnotationUtils
-import org.springframework.core.annotation.Order
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.lang.reflect.Method
@@ -21,31 +17,25 @@ import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
-// Ordered just outside @Transactional (LOWEST_PRECEDENCE) so this aspect always wraps the
-// transaction boundary. When the finally block runs, an active transaction means we are inside
-// an outer caller's transaction → use afterCommit. No active transaction means the method's
-// own transaction already committed → call reindex immediately.
+// Ordered just outside @Transactional (LOWEST_PRECEDENCE) so this advice always wraps the
+// transaction boundary — see EntityIndexingConfiguration for how the order is applied.
 //
-// Broad execution pointcut + per-method annotation cache mirrors how Spring resolves
-// @Transactional, allowing @ReindexContext on interface methods to be found via
-// AnnotationUtils regardless of whether the proxy is JDK or CGLIB.
-@Aspect
-@Order(Ordered.LOWEST_PRECEDENCE - 1)
+// Per-method annotation cache mirrors how Spring resolves @Transactional, so @ReindexContext
+// on interface methods is found via AnnotationUtils regardless of proxy type (JDK or CGLIB).
 class ReindexContextAspect(
     private val reindexService: ReindexService,
     private val sinks: List<IndexSink>,
     private val listenerRegistry: EntityIndexListenerRegistry,
-) {
+) : MethodInterceptor {
 
     private val log = LoggerFactory.getLogger(javaClass)
     private val annotationCache = ConcurrentHashMap<Method, Optional<ReindexContext>>()
 
-    @Around("execution(* *(..)) && !within(com.indexing..*)")
-    fun around(pjp: ProceedingJoinPoint): Any? {
-        val method = (pjp.signature as MethodSignature).method
+    override fun invoke(invocation: MethodInvocation): Any? {
+        val method = invocation.method
         val reindexContext = annotationCache.getOrPut(method) {
             Optional.ofNullable(AnnotationUtils.findAnnotation(method, ReindexContext::class.java))
-        }.orElse(null) ?: return pjp.proceed()
+        }.orElse(null) ?: return invocation.proceed()
 
         val isRoot = when (reindexContext.propagation) {
             ReindexPropagation.REQUIRED     -> !ReindexContextHolder.isActive()
@@ -53,20 +43,19 @@ class ReindexContextAspect(
         }
 
         if (isRoot) {
-            val outerActive = ReindexContextHolder.isActive()
-            if (outerActive) {
-                log.debug("Suspending outer reindex context, starting fresh scope method={}", pjp.signature)
+            if (ReindexContextHolder.isActive()) {
+                log.debug("Suspending outer reindex context, starting fresh scope method={}", method.name)
             } else {
-                log.debug("Starting reindex context method={}", pjp.signature)
+                log.debug("Starting reindex context method={}", method.name)
             }
             ReindexContextHolder.start()
         } else {
-            log.debug("Joining outer reindex context method={}", pjp.signature)
+            log.debug("Joining outer reindex context method={}", method.name)
         }
 
         var completed = false
         try {
-            val result = pjp.proceed()
+            val result = invocation.proceed()
             completed = true
             return result
         } finally {

@@ -56,13 +56,15 @@ Add the dependency:
 implementation("com.sparjapati:entityIndexing:<version>")
 ```
 
-Enable the library on your main application class:
+Enable the library on your main application class and set `basePackages` to the root package(s) of your application:
 
 ```kotlin
 @SpringBootApplication
-@EnableEntityIndexing
+@EnableEntityIndexing(basePackages = ["com.myapp"])
 class MyApplication
 ```
+
+`basePackages` restricts interception to beans whose class resides under those packages — Spring internals and third-party libraries are never touched. When omitted the library falls back to intercepting beans annotated with a Spring stereotype (`@Service`, `@Component`, `@Repository`, `@RestController`).
 
 ---
 
@@ -250,15 +252,24 @@ Implement this interface and register the implementation as a Spring bean to rec
 | Bean | Role |
 |---|---|
 | `IndexConverterRegistry` | Discovers all `IndexConverter` beans; validates no duplicate entity class registrations at startup |
-| `ReindexContextAspect` | `@Around` advice for `@ReindexContext`; manages `ReindexContextHolder` lifecycle; calls `ReindexService`, all `IndexSink` beans, and matching `EntityIndexListener` beans per entity class |
-| `ReindexParamAspect` | `@AfterReturning` advice on all Spring beans; collects `@ReindexId`-annotated parameters into the active context |
+| `reindexContextAdvisor` | `DefaultPointcutAdvisor` wrapping `ReindexContextAspect` (`MethodInterceptor`); manages `ReindexContextHolder` lifecycle; calls `ReindexService`, all `IndexSink` beans, and matching `EntityIndexListener` beans per entity class |
+| `reindexParamAdvisor` | `DefaultPointcutAdvisor` wrapping `ReindexParamAspect` (`MethodInterceptor`); collects `@ReindexId`-annotated parameters into the active context |
 | `ReindexService` | Loads entities from the database (chunked JPA Criteria queries) and converts them via `IndexConverterRegistry` |
 
 No beans are registered unless `@EnableEntityIndexing` is present.
 
-### Transaction safety and aspect ordering
+### Pointcut scoping
 
-`ReindexContextAspect` is annotated with `@Order(Ordered.LOWEST_PRECEDENCE - 1)`, placing it **just outside** Spring's `@Transactional` interceptor (which defaults to `Ordered.LOWEST_PRECEDENCE`). This makes the ordering deterministic regardless of bean registration order.
+Both advisors share the same pointcut expression, built from `basePackages` at startup:
+
+- **`basePackages` set** → `within(com.myapp..*) && !within(com.indexing..*)` (only the application's own classes)
+- **`basePackages` empty** → Spring stereotype beans (`@Service`, `@Component`, `@Repository`, `@RestController`) as a safe fallback
+
+Using `DefaultPointcutAdvisor` rather than a broad AspectJ `execution(* *(..))` pointcut means Spring never even considers applying the advice to framework-internal or third-party beans.
+
+### Transaction safety and advice ordering
+
+`reindexContextAdvisor` has `order = Ordered.LOWEST_PRECEDENCE - 1`, placing it **just outside** Spring's `@Transactional` interceptor (which defaults to `Ordered.LOWEST_PRECEDENCE`). This makes the ordering deterministic regardless of bean registration order.
 
 Because `ReindexContextAspect` is the outer wrapper, what `isActualTransactionActive()` returns in the `finally` block depends on the call context:
 
@@ -270,9 +281,9 @@ Because `ReindexContextAspect` is the outer wrapper, what `isActualTransactionAc
 
 In all cases the event only reaches the listener after the relevant transaction has committed — either because it already committed before the `finally` block ran, or because the `afterCommit` hook waits for the outer commit.
 
-If the transaction rolls back, `completed` is `false` (the exception propagated through `pjp.proceed()`) and the event is never published.
+If the transaction rolls back, `completed` is `false` (the exception propagated through `invocation.proceed()`) and the event is never published.
 
-> **Note:** the order of `@Transactional` and `@ReindexContext` on a method declaration has no effect on AOP execution order — only the `@Order` value on the aspect class matters.
+> **Note:** the order of `@Transactional` and `@ReindexContext` on a method declaration has no effect on AOP execution order — only the advisor's `order` value matters.
 
 ### ID deduplication
 
