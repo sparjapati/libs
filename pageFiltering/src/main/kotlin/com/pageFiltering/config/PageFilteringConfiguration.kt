@@ -3,17 +3,19 @@ package com.pageFiltering.config
 import com.pageFiltering.PageRequestMetaController
 import com.pageFiltering.PageRequestMetaRegistry
 import com.pageFiltering.PageRequestResolver
+import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 
 /**
- * Registers [PageRequestResolver], [PageRequestMetaRegistry], and [PageRequestMetaController]
- * as Spring beans. Imported via [@EnablePageFiltering][EnablePageFiltering].
+ * Auto-configuration for page filtering. Activated automatically by Spring Boot —
+ * no `@Enable` annotation required on the importing application.
+ *
+ * Registers [PageRequestResolver], [PageRequestMetaRegistry], and [PageRequestMetaController].
  */
-@Configuration
+@AutoConfiguration
 class PageFilteringConfiguration {
 
     @Bean
