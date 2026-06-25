@@ -42,11 +42,6 @@ class ResultFileWriter(
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger(ResultFileWriter::class.java)
-        private const val STATUS_COLUMN = "status"
-        private const val FAILURE_REASON_COLUMN = "failure-reason"
-        private const val STATUS_SUCCESS = "SUCCESS"
-        private const val STATUS_FAILED = "FAILED"
-        private const val STATUS_SUCCESS_DESC = "-"
     }
 
     private val extraColumnNames: List<String>
@@ -120,8 +115,8 @@ class ResultFileWriter(
                     printer.printRecord(buildList {
                         repeat(hdrs.size) { col -> add(record[col]) }
                         add(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
-                        add(error ?: "")
-                        extraCols.forEach { add(extras[it] ?: "") }
+                        add(error ?: EMPTY_CELL_VALUE)
+                        extraCols.forEach { add(extras[it] ?: EMPTY_CELL_VALUE) }
                     })
                 }
             }
@@ -145,9 +140,9 @@ class ResultFileWriter(
                 val xlsxRow = sheet.createRow(xlsxRowIdx++)
                 repeat(hdrs.size) { col -> xlsxRow.createCell(col).setCellValue(record[col]) }
                 xlsxRow.createCell(hdrs.size).setCellValue(if (error == null) STATUS_SUCCESS else STATUS_FAILED)
-                xlsxRow.createCell(hdrs.size + 1).setCellValue(error ?: STATUS_SUCCESS_DESC)
+                xlsxRow.createCell(hdrs.size + 1).setCellValue(error ?: EMPTY_CELL_VALUE)
                 extraCols.forEachIndexed { i2, key ->
-                    xlsxRow.createCell(hdrs.size + 2 + i2).setCellValue(extras[key] ?: "")
+                    xlsxRow.createCell(hdrs.size + 2 + i2).setCellValue(extras[key] ?: EMPTY_CELL_VALUE)
                 }
             }
 

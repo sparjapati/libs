@@ -141,7 +141,7 @@ private class RowSkipListener(
 
     override fun onSkipInWrite(item: SpreadsheetRow, t: Throwable) {
         val error = t.message ?: t::class.simpleName ?: "unknown error"
-        LOGGER.warn("jobId={} — row #{} skipped on write: {}", jobId, item.rowNumber, error)
+        LOGGER.warn("jobId={} — row #{} skipped while processing: {}", jobId, item.rowNumber, error)
         accumulator.recordError(rowNumber = item.rowNumber, error = error)
     }
 }

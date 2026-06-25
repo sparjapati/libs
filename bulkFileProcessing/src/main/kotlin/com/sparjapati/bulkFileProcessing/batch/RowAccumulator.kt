@@ -46,9 +46,9 @@ class RowAccumulator {
         }
         _rowNumbers.add(row.rowNumber)
         inlinePrinter.printRecord(buildList {
-            _headers!!.forEach { add(row.values[it] ?: "") }
+            _headers!!.forEach { add(row.values[it].takeUnless { v -> v.isNullOrBlank() } ?: EMPTY_CELL_VALUE) }
             add(STATUS_SUCCESS)
-            add("")
+            add(EMPTY_CELL_VALUE)
         })
         _rowCount++
     }
@@ -77,9 +77,4 @@ class RowAccumulator {
         inlinePrinter.close()
     }
 
-    private companion object {
-        const val STATUS_COLUMN = "status"
-        const val FAILURE_REASON_COLUMN = "failure-reason"
-        const val STATUS_SUCCESS = "SUCCESS"
-    }
 }
