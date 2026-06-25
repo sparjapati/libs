@@ -16,7 +16,6 @@ A Spring Boot library that provides annotation-driven, reindex-on-write semantic
 - [Annotations](#annotations)
   - [@ReindexContext](#reindexcontext)
   - [@ReindexId](#reindexid)
-- [Configuration](#configuration)
 - [IndexSink](#indexsink)
 - [Internals](#internals)
 
@@ -201,21 +200,6 @@ fun markerMethod(@ReindexId(UserEntity::class) ids: List<String>) {}
 ```
 
 Marks a method parameter (type `String` or `Collection<*>`) whose value(s) should be registered for reindexing. The aspect collects these values only when a `@ReindexContext` scope is active — calls outside a scope are ignored. The `entity` parameter is the JPA entity `KClass` that identifies which `IndexConverter` to use.
-
----
-
-## Configuration
-
-| Property | Type | Default | Description |
-|---|---|---|---|
-| `indexing.chunk-size` | `Int` | `50` | Number of IDs per JPA query batch during reindex |
-
-Example `application.yml`:
-
-```yaml
-indexing:
-  chunk-size: 100
-```
 
 ---
 

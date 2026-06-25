@@ -10,15 +10,14 @@ import com.indexing.service.ReindexService
 import com.indexing.sink.IndexSink
 import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
+import org.springframework.core.env.Environment
 
 @Configuration
 @EnableAspectJAutoProxy(proxyTargetClass = true)
-@EnableConfigurationProperties(EntityIndexingProperties::class)
-class EntityIndexingConfiguration {
+class EntityIndexingConfiguration(private val environment: Environment) {
 
     @Bean
     fun indexConverterRegistry(converters: List<IndexConverter<*, *>>): IndexConverterRegistry =
@@ -31,8 +30,11 @@ class EntityIndexingConfiguration {
     fun reindexService(
         entityManager: EntityManager,
         registry: IndexConverterRegistry,
-        properties: EntityIndexingProperties,
-    ): ReindexService = ReindexService(entityManager, registry, properties.chunkSize)
+    ): ReindexService = ReindexService(
+        entityManager = entityManager,
+        converterRegistry = registry,
+        chunkSize = environment.getProperty("spring.jpa.properties.hibernate.jdbc.batch_size", Int::class.java, 50),
+    )
 
     @Bean
     fun entityIndexListenerRegistry(
