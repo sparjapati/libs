@@ -22,6 +22,7 @@ spring-context = { module = "org.springframework:spring-context" }
 spring-aop = { module = "org.springframework:spring-aop" }
 spring-tx = { module = "org.springframework:spring-tx" }
 spring-web = { module = "org.springframework:spring-web" }
+spring-webmvc = { module = "org.springframework:spring-webmvc" }
 
 spring-data-jpa = { module = "org.springframework.data:spring-data-jpa" }
 spring-data-elasticsearch = { module = "org.springframework.data:spring-data-elasticsearch" }

@@ -22,3 +22,6 @@ project(":bulkFileProcessing") {
 project(":entityIndexing") {
     version = property("entityIndexingVersion") as String
 }
+project(":pageFiltering") {
+    version = property("pageFilteringVersion") as String
+}
