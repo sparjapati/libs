@@ -36,6 +36,10 @@ class BatchJobCompletionListener(
         val skipCount = jobExecution.stepExecutions.sumOf { it.skipCount }
 
         val resultFilePath = writer.write()
+        LOGGER.info(
+            "Bulk job completed jobId={} processorType={} status={} writeCount={} skipCount={} resultFile={}",
+            jobId, processorType, jobExecution.status, writeCount, skipCount, resultFilePath,
+        )
 
         if (handler == null) {
             LOGGER.debug("No BulkJobCompletionHandler registered for processorType={} jobId={}", processorType, jobId)

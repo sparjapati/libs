@@ -2,6 +2,7 @@ package com.bulkFileProcessing.batch.reader
 
 import com.bulkFileProcessing.batch.RowAccumulator
 import com.bulkFileProcessing.batch.SpreadsheetRow
+import org.slf4j.LoggerFactory
 import org.springframework.batch.infrastructure.item.ItemReader
 
 /**
@@ -23,9 +24,17 @@ class SpreadsheetItemReader(
     private val accumulator: RowAccumulator,
 ) : ItemReader<SpreadsheetRow> {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     private val delegate: ItemReader<SpreadsheetRow> = when (fileType.lowercase()) {
-        "xlsx" -> XlsxSpreadsheetReader(filePath = filePath)
-        else -> CsvSpreadsheetReader(filePath = filePath)
+        "xlsx" -> {
+            log.info("Spreadsheet reader: using XLSX reader filePath={}", filePath)
+            XlsxSpreadsheetReader(filePath = filePath)
+        }
+        else -> {
+            log.info("Spreadsheet reader: using CSV reader filePath={}", filePath)
+            CsvSpreadsheetReader(filePath = filePath)
+        }
     }
 
     override fun read(): SpreadsheetRow? {

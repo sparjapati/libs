@@ -37,6 +37,10 @@ class FileProcessingJobFactory(
     private val resultBaseDir: File,
 ) {
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(FileProcessingJobFactory::class.java)
+    }
+
     /**
      * Builds a [Job] wired to the given [processor].
      *
@@ -58,6 +62,10 @@ class FileProcessingJobFactory(
         fileType: String,
         originalFileName: String,
     ): Job {
+        LOGGER.debug(
+            "Creating batch job jobId={} processorType={} fileType={} chunkSize={} skipLimit={}",
+            jobId, processor.processorType, fileType, processor.chunkSize, processor.skipLimit,
+        )
         val typedProcessor = processor as FileProcessor<Any>
         val accumulator = RowAccumulator()
         val fileWriter = ResultFileWriter(

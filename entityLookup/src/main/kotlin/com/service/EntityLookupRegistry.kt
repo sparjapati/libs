@@ -18,9 +18,11 @@ class EntityLookupRegistry(
     fun exists(entityName: String, id: Any): Boolean {
         val service = serviceMap[entityName.uppercase()]
         if (service == null) {
-            LOGGER.warn("No entity-lookup service found for entity $entityName")
+            LOGGER.warn("No entity-lookup service found for entity={} — returning true (permissive fallback)", entityName)
             return true
         }
-        return service.exists(id)
+        val exists = service.exists(id)
+        LOGGER.debug("Entity lookup entity={} id={} exists={}", entityName, id, exists)
+        return exists
     }
 }

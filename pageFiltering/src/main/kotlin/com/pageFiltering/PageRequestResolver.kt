@@ -1,5 +1,6 @@
 package com.pageFiltering
 
+import org.slf4j.LoggerFactory
 import org.springframework.core.MethodParameter
 import org.springframework.web.bind.support.WebDataBinderFactory
 import org.springframework.web.context.request.NativeWebRequest
@@ -13,6 +14,7 @@ class PageRequestResolver : HandlerMethodArgumentResolver {
         private const val KEY_VALUE_SEPARATOR: String = ":"
         private const val MULTI_VALUED_FILTER_SEPARATOR = ","
 
+        private val log = LoggerFactory.getLogger(PageRequestResolver::class.java)
         private val searchableFieldsCache = ConcurrentHashMap<KClass<*>, Set<SearchableField>>()
         private val sortConstantsCache = ConcurrentHashMap<Class<*>, List<SortParamKey>>()
     }
@@ -56,6 +58,10 @@ class PageRequestResolver : HandlerMethodArgumentResolver {
             sortStrings = sortParameterValues
         )
 
+        log.debug(
+            "Resolved PageRequestParams query={} filterCount={} sortCount={} page={} size={}",
+            query, filters.size, sortOrders.size, page, size,
+        )
         return PageRequestParams(
             query = query,
             filters = filters,

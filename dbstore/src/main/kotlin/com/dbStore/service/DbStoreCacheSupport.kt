@@ -3,6 +3,7 @@ package com.dbStore.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.reflect.MethodSignature
+import org.slf4j.LoggerFactory
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext
 import java.time.LocalDateTime
@@ -12,6 +13,7 @@ class DbStoreCacheSupport(
     private val objectMapper: ObjectMapper,
 ) {
 
+    private val log = LoggerFactory.getLogger(javaClass)
     private val parser = SpelExpressionParser()
 
     fun buildCacheKey(
@@ -41,12 +43,17 @@ class DbStoreCacheSupport(
     }
 
     fun getFromCache(key: String): String? {
-        val entry = dbStoreService[key] ?: return null
+        val entry = dbStoreService[key] ?: run {
+            log.debug("Cache miss key={}", key)
+            return null
+        }
 
         if (entry.expiresAt?.isBefore(LocalDateTime.now()) == true) {
+            log.debug("Cache entry expired, evicting key={}", key)
             dbStoreService.delete(key)
             return null
         }
+        log.debug("Cache hit key={}", key)
         return entry.value
     }
 
@@ -59,6 +66,7 @@ class DbStoreCacheSupport(
             LocalDateTime.now().plusSeconds(ttlSeconds)
         else null
 
+        log.debug("Saving to cache key={} ttlSeconds={}", key, ttlSeconds)
         dbStoreService.save(
             cacheKey = key,
             value = value,
@@ -67,10 +75,12 @@ class DbStoreCacheSupport(
     }
 
     fun delete(key: String) {
+        log.debug("Deleting cache entry key={}", key)
         dbStoreService.delete(key)
     }
 
     fun deleteAllByPrefix(prefix: String) {
+        log.debug("Deleting all cache entries with prefix={}", prefix)
         dbStoreService.deleteAllByPrefix(prefix)
     }
 

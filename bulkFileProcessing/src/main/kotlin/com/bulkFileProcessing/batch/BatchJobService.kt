@@ -10,18 +10,6 @@ import java.io.File
 
 /**
  * Orchestrates bulk file processing: saves the uploaded file to a temp location,
- * builds the Spring Batch [Job] via [FileProcessingJobFactory], submits it to a
- * background thread pool, and returns immediately with a [jobId].
- *
- * The temp file is deleted in a `finally` block after the job finishes (or fails),
- * so it is not left around after the HTTP request completes.
- *
- * Uses [JobRepository.createJobExecution] + [org.springframework.batch.core.job.Job.execute]
- * directly instead of the deprecated [org.springframework.batch.core.launch.JobLauncher] API
- * (deprecated in Spring Batch 6.0).
- */
-/**
- * Orchestrates bulk file processing: saves the uploaded file to a temp location,
  * builds the Spring Batch [Job] via [FileProcessingJobFactory], and executes it
  * synchronously in the calling thread.
  *
@@ -74,6 +62,10 @@ class BatchJobService(
             return
         }
         val extension = sourceFile.extension.lowercase().ifEmpty { "csv" }
+        LOGGER.info(
+            "Starting bulk job jobId={} processorType={} fileType={} fileSizeBytes={} originalFileName={}",
+            jobId, processorType, extension, sourceFile.length(), originalFileName,
+        )
 
         val params = JobParametersBuilder()
             .addString(JOB_PARAM_JOB_ID, jobId)
@@ -91,9 +83,12 @@ class BatchJobService(
             originalFileName = originalFileName,
         )
 
-        LOGGER.info("Starting bulk job jobId={} processorType={}", jobId, processorType)
         val jobInstance = jobRepository.createJobInstance(job.name, params)
         val jobExecution = jobRepository.createJobExecution(jobInstance, params, ExecutionContext())
         job.execute(jobExecution)
+        LOGGER.info(
+            "Bulk job finished jobId={} processorType={} status={}",
+            jobId, processorType, jobExecution.status,
+        )
     }
 }
