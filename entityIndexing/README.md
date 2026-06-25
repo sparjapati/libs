@@ -208,14 +208,13 @@ Marks a method parameter (type `String` or `Collection<*>`) whose value(s) shoul
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `sparjapati.indexing.chunk-size` | `Int` | `50` | Number of IDs per JPA query batch during reindex |
+| `indexing.chunk-size` | `Int` | `50` | Number of IDs per JPA query batch during reindex |
 
 Example `application.yml`:
 
 ```yaml
-sparjapati:
-  indexing:
-    chunk-size: 100
+indexing:
+  chunk-size: 100
 ```
 
 ---

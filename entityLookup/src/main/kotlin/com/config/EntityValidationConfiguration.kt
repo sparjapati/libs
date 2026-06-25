@@ -1,0 +1,45 @@
+package com.config
+
+import com.service.EntityLookupRegistry
+import com.aspect.EntityValidationAspect
+import com.service.EntityLookupService
+import com.service.EntityValidationCache
+import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.EnableAspectJAutoProxy
+import org.springframework.context.annotation.Scope
+import org.springframework.context.annotation.ScopedProxyMode
+import org.springframework.web.context.WebApplicationContext
+
+// Loaded exclusively via @Import from @EnableEntityValidation — no @ConditionalOnBean needed.
+@Configuration
+@EnableAspectJAutoProxy(proxyTargetClass = true)
+class EntityValidationConfiguration {
+    companion object {
+        val LOGGER = LoggerFactory.getLogger(EntityValidationConfiguration::class.java)
+    }
+
+    @Bean
+    @Scope(value = WebApplicationContext.SCOPE_REQUEST, proxyMode = ScopedProxyMode.TARGET_CLASS)
+    fun entityValidationCache(): EntityValidationCache {
+        return EntityValidationCache()
+    }
+
+    @Bean
+    fun entityLookupRegistry(services: List<EntityLookupService>): EntityLookupRegistry {
+        return EntityLookupRegistry(services)
+    }
+
+    @Bean
+    fun entityValidationAspect(
+        registry: EntityLookupRegistry,
+        cache: EntityValidationCache
+    ): EntityValidationAspect {
+        LOGGER.info("Entity-lookup enabled!")
+        return EntityValidationAspect(
+            entityLookupRegistry = registry,
+            entityValidationCache = cache
+        )
+    }
+}
