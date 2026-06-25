@@ -1,5 +1,7 @@
 package com.sparjapati.indexing.aspect
 
+import com.sparjapati.indexing.annotation.ReindexContext
+import com.sparjapati.indexing.annotation.ReindexPropagation
 import com.sparjapati.indexing.context.ReindexContextHolder
 import com.sparjapati.indexing.listener.EntityIndexListenerRegistry
 import com.sparjapati.indexing.service.ReindexService
@@ -28,10 +30,13 @@ class ReindexContextAspect(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Around("@annotation(com.sparjapati.indexing.annotation.ReindexContext)")
-    fun around(pjp: ProceedingJoinPoint): Any? {
+    @Around("@annotation(reindexContext)")
+    fun around(pjp: ProceedingJoinPoint, reindexContext: ReindexContext): Any? {
 
-        val isRoot = !ReindexContextHolder.isActive()
+        val isRoot = when (reindexContext.propagation) {
+            ReindexPropagation.REQUIRED     -> !ReindexContextHolder.isActive()
+            ReindexPropagation.REQUIRES_NEW -> true
+        }
 
         if (isRoot) {
             log.debug("Starting reindex context method={}", pjp.signature)

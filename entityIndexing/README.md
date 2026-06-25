@@ -179,7 +179,20 @@ The `self` reference is required because the marker method must be called throug
 fun myServiceMethod(...) { ... }
 ```
 
-Marks the root of a reindex scope. The aspect starts the `ReindexContextHolder` on entry and calls `ReindexService` + all `IndexSink` beans per collected entity class on exit (after transaction commit if a transaction is active). Nested `@ReindexContext` calls within the same thread are transparent — only the outermost call manages the scope.
+Marks the root of a reindex scope. On exit (after transaction commit if active) it calls `ReindexService` + all `IndexSink` beans for each collected entity class.
+
+The `propagation` parameter controls behaviour when called inside an existing scope:
+
+| Propagation | Behaviour |
+|---|---|
+| `REQUIRED` *(default)* | Joins the active scope. Nested calls contribute their IDs to the outermost scope's batch. |
+| `REQUIRES_NEW` | Always starts a fresh, independent scope. The outer scope is suspended until this one completes and flushes. |
+
+```kotlin
+// inner method flushes independently, outer scope resumes after
+@ReindexContext(propagation = ReindexPropagation.REQUIRES_NEW)
+fun reindexCriticalEntity(id: String) { ... }
+```
 
 ### @ReindexId
 
