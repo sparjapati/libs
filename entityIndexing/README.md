@@ -1,0 +1,228 @@
+# EntityIndexing
+
+A Spring Boot library that provides annotation-driven, reindex-on-write semantics for JPA entities. Annotate service methods to automatically collect modified entity IDs during a transaction, then convert and push them to a search store (e.g. Elasticsearch) after the transaction commits.
+
+---
+
+## Table of Contents
+
+- [How It Works](#how-it-works)
+- [Setup](#setup)
+- [Usage Pattern](#usage-pattern)
+  - [1. Define an index document](#1-define-an-index-document)
+  - [2. Implement IndexConverter](#2-implement-indexconverter)
+  - [3. Register an IndexSink](#3-register-an-indexsink)
+  - [4. Annotate service methods](#4-annotate-service-methods)
+- [Annotations](#annotations)
+  - [@ReindexContext](#reindexcontext)
+  - [@ReindexId](#reindexid)
+- [Configuration](#configuration)
+- [IndexSink](#indexsink)
+- [Internals](#internals)
+
+---
+
+## How It Works
+
+```
+@ReindexContext method called
+    │
+    ├── ReindexContextHolder.start()      (root call only — nested calls are no-ops)
+    │
+    ├── method executes
+    │   └── marker method with @ReindexId param called
+    │       └── ReindexParamAspect collects IDs into ThreadLocal context
+    │
+    └── method returns
+        └── ReindexContextHolder.finish() → Map<KClass<*>, Set<String>>
+            │
+            ├── active transaction? → register afterCommit hook → publish ReindexBatchEvent
+            └── no transaction?    → publish ReindexBatchEvent immediately
+                                            │
+                                    ReindexingListener.handle()
+                                            │
+                                    ReindexService.reindex()  (chunked JPA queries)
+                                            │
+                                    IndexSink.push()  (e.g. Elasticsearch)
+```
+
+If the surrounding transaction rolls back, the event is never published and no reindex occurs.
+
+---
+
+## Setup
+
+Add the dependency:
+
+```kotlin
+// build.gradle.kts
+implementation("com.sparjapati:entityIndexing:<version>")
+```
+
+Enable the library on your main application class:
+
+```kotlin
+@SpringBootApplication
+@EnableEntityIndexing
+class MyApplication
+```
+
+---
+
+## Usage Pattern
+
+### 1. Define an index document
+
+Extend `AbstractEntityIndex` to describe the shape of the indexed document:
+
+```kotlin
+class UserIndex(
+    id: String,
+    var name: String,
+    var email: String,
+    lastModified: Instant,
+    lastModifiedBy: String,
+    isDeleted: Boolean = false,
+) : AbstractEntityIndex(id, lastModified, lastModifiedBy, isDeleted)
+```
+
+If you are pushing to Elasticsearch, also add `@Document`:
+
+```kotlin
+@Document(indexName = "users")
+class UserIndex(...)  : AbstractEntityIndex(...)
+```
+
+### 2. Implement IndexConverter
+
+Declare which JPA entity class this converter handles via `entityClass`:
+
+```kotlin
+@Component
+class UserIndexConverter : IndexConverter<UserEntity, UserIndex> {
+
+    override val entityClass = UserEntity::class
+
+    override fun convert(source: UserEntity): UserIndex =
+        UserIndex(
+            id           = source.id,
+            name         = source.name,
+            email        = source.email,
+            lastModified = source.lastModified,
+            lastModifiedBy = source.lastModifiedBy,
+            isDeleted    = source.isDeleted,
+        )
+}
+```
+
+The library validates at startup that no two converters are registered for the same entity class.
+
+### 3. Register an IndexSink
+
+The library provides `ElasticsearchIndexSink` — register it as a bean in your application:
+
+```kotlin
+@Bean
+fun elasticsearchIndexSink(ops: ElasticsearchOperations) = ElasticsearchIndexSink(ops)
+```
+
+Or implement the `IndexSink` interface to push to any other store. Multiple sinks are supported; all receive each batch.
+
+### 4. Annotate service methods
+
+Mark the transaction boundary with `@ReindexContext`, create a marker method with `@ReindexId`, and call it with the IDs of the changed entities:
+
+```kotlin
+@Service
+class UserService(
+    @Lazy @Resource(type = UserService::class) private val self: UserService,
+) {
+    @Transactional
+    @ReindexContext
+    fun createUsers(requests: List<CreateUserRequest>): List<UserDto> {
+        val saved = userRepository.saveAll(requests.map { it.toEntity() })
+        self.reindexUsers(userIds = saved.map { it.id })
+        return saved.map { it.toDto() }
+    }
+
+    // Empty body — exists only so @ReindexId can be intercepted by the aspect.
+    fun reindexUsers(@ReindexId(UserEntity::class) userIds: List<String>) {}
+}
+```
+
+The `self` reference is required because the marker method must be called through the Spring proxy for the aspect to intercept it.
+
+---
+
+## Annotations
+
+### @ReindexContext
+
+```kotlin
+@ReindexContext
+fun myServiceMethod(...) { ... }
+```
+
+Marks the root of a reindex scope. The aspect starts the `ReindexContextHolder` on entry and publishes a `ReindexBatchEvent` on exit (after transaction commit if a transaction is active). Nested `@ReindexContext` calls within the same thread are transparent — only the outermost call manages the scope.
+
+### @ReindexId
+
+```kotlin
+fun markerMethod(@ReindexId(UserEntity::class) ids: List<String>) {}
+```
+
+Marks a method parameter (type `String` or `Collection<*>`) whose value(s) should be registered for reindexing. The aspect collects these values only when a `@ReindexContext` scope is active — calls outside a scope are ignored. The `entity` parameter is the JPA entity `KClass` that identifies which `IndexConverter` to use.
+
+---
+
+## Configuration
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `sparjapati.indexing.chunk-size` | `Int` | `50` | Number of IDs per JPA query batch during reindex |
+
+Example `application.yml`:
+
+```yaml
+sparjapati:
+  indexing:
+    chunk-size: 100
+```
+
+---
+
+## IndexSink
+
+```kotlin
+interface IndexSink {
+    fun push(entityClass: KClass<*>, documents: List<AbstractEntityIndex>)
+}
+```
+
+Implement this interface and register the implementation as a Spring bean to receive converted index documents. The library calls all registered `IndexSink` beans for each reindex batch.
+
+`ElasticsearchIndexSink` is provided as a ready-made implementation for Spring Data Elasticsearch. Concrete index document classes must carry `@Document(indexName = "...")` for it to resolve the target index.
+
+---
+
+## Internals
+
+### Beans registered by `@EnableEntityIndexing`
+
+| Bean | Role |
+|---|---|
+| `IndexConverterRegistry` | Discovers all `IndexConverter` beans; validates no duplicate entity class registrations at startup |
+| `ReindexContextAspect` | `@Around` advice for `@ReindexContext`; manages `ReindexContextHolder` lifecycle and publishes `ReindexBatchEvent` |
+| `ReindexParamAspect` | `@AfterReturning` advice on all Spring beans; collects `@ReindexId`-annotated parameters into the active context |
+| `ReindexService` | Loads entities from the database (chunked JPA Criteria queries) and converts them via `IndexConverterRegistry` |
+| `ReindexingListener` | `@EventListener` for `ReindexBatchEvent`; delegates to `ReindexService` then fans out to all `IndexSink` beans |
+
+No beans are registered unless `@EnableEntityIndexing` is present.
+
+### Transaction safety
+
+`ReindexContextAspect` checks `TransactionSynchronizationManager.isActualTransactionActive()` before publishing. If a transaction is active, the event is deferred to `afterCommit()` via `TransactionSynchronization`. If the transaction rolls back, the hook is never called and no reindex occurs.
+
+### ID deduplication
+
+`ReindexContextHolder` stores IDs in a `MutableSet` per entity class. Multiple calls to the marker method within the same `@ReindexContext` scope automatically deduplicate — each ID is only reindexed once per scope.

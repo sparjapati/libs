@@ -24,6 +24,7 @@ spring-tx = { module = "org.springframework:spring-tx" }
 spring-web = { module = "org.springframework:spring-web" }
 
 spring-data-jpa = { module = "org.springframework.data:spring-data-jpa" }
+spring-data-elasticsearch = { module = "org.springframework.data:spring-data-elasticsearch" }
 
 jakarta-persistence = { module = "jakarta.persistence:jakarta.persistence-api", version.ref = "jakarta-persistence" }
 

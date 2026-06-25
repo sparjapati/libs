@@ -8,3 +8,4 @@ rootProject.name = "libs"
 include("dbstore")
 include("entityLookup")
 include("bulkFileProcessing")
+include("entityIndexing")
