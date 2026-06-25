@@ -4,13 +4,13 @@ import com.sparjapati.indexing.aspect.ReindexContextAspect
 import com.sparjapati.indexing.aspect.ReindexParamAspect
 import com.sparjapati.indexing.core.IndexConverter
 import com.sparjapati.indexing.core.IndexConverterRegistry
-import com.sparjapati.indexing.listener.ReindexingListener
+import com.sparjapati.indexing.listener.EntityIndexListener
+import com.sparjapati.indexing.listener.EntityIndexListenerRegistry
 import com.sparjapati.indexing.service.ReindexService
 import com.sparjapati.indexing.sink.IndexSink
 import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
@@ -25,10 +25,6 @@ class EntityIndexingConfiguration {
         IndexConverterRegistry(converters)
 
     @Bean
-    fun reindexContextAspect(publisher: ApplicationEventPublisher): ReindexContextAspect =
-        ReindexContextAspect(publisher)
-
-    @Bean
     fun reindexParamAspect(): ReindexParamAspect = ReindexParamAspect()
 
     @Bean
@@ -39,8 +35,14 @@ class EntityIndexingConfiguration {
     ): ReindexService = ReindexService(entityManager, registry, properties.chunkSize)
 
     @Bean
-    fun reindexingListener(
+    fun entityIndexListenerRegistry(
+        @Autowired(required = false) listeners: List<EntityIndexListener<*>> = emptyList(),
+    ): EntityIndexListenerRegistry = EntityIndexListenerRegistry(listeners)
+
+    @Bean
+    fun reindexContextAspect(
         reindexService: ReindexService,
+        listenerRegistry: EntityIndexListenerRegistry,
         @Autowired(required = false) sinks: List<IndexSink> = emptyList(),
-    ): ReindexingListener = ReindexingListener(reindexService, sinks)
+    ): ReindexContextAspect = ReindexContextAspect(reindexService, sinks, listenerRegistry)
 }

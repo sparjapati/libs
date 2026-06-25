@@ -36,10 +36,8 @@ A Spring Boot library that provides annotation-driven, reindex-on-write semantic
     └── method returns
         └── ReindexContextHolder.finish() → Map<KClass<*>, Set<String>>
             │
-            ├── active transaction? → register afterCommit hook → publish ReindexBatchEvent
-            └── no transaction?    → publish ReindexBatchEvent immediately
-                                            │
-                                    ReindexingListener.handle()
+            ├── active transaction? → register afterCommit hook → reindex() per entity class
+            └── no transaction?    → reindex() per entity class immediately
                                             │
                                     ReindexService.reindex()  (chunked JPA queries)
                                             │
@@ -128,7 +126,25 @@ fun elasticsearchIndexSink(ops: ElasticsearchOperations) = ElasticsearchIndexSin
 
 Or implement the `IndexSink` interface to push to any other store. Multiple sinks are supported; all receive each batch.
 
-### 4. Annotate service methods
+### 4. (Optional) Register per-entity listeners
+
+For logic that should run only for a specific entity class, implement `EntityIndexListener` instead of `IndexSink`:
+
+```kotlin
+@Component
+class UserReindexListener : EntityIndexListener<UserIndex> {
+
+    override val entityClass = UserEntity::class
+
+    override fun onReindex(documents: List<UserIndex>) {
+        // called only when UserEntity documents are reindexed
+    }
+}
+```
+
+Multiple listeners for the same entity class are all called. `IndexSink` and `EntityIndexListener` are independent — you can use both.
+
+### 5. Annotate service methods
 
 Mark the transaction boundary with `@ReindexContext`, create a marker method with `@ReindexId`, and call it with the IDs of the changed entities:
 
@@ -163,7 +179,7 @@ The `self` reference is required because the marker method must be called throug
 fun myServiceMethod(...) { ... }
 ```
 
-Marks the root of a reindex scope. The aspect starts the `ReindexContextHolder` on entry and publishes a `ReindexBatchEvent` on exit (after transaction commit if a transaction is active). Nested `@ReindexContext` calls within the same thread are transparent — only the outermost call manages the scope.
+Marks the root of a reindex scope. The aspect starts the `ReindexContextHolder` on entry and calls `ReindexService` + all `IndexSink` beans per collected entity class on exit (after transaction commit if a transaction is active). Nested `@ReindexContext` calls within the same thread are transparent — only the outermost call manages the scope.
 
 ### @ReindexId
 
@@ -212,10 +228,9 @@ Implement this interface and register the implementation as a Spring bean to rec
 | Bean | Role |
 |---|---|
 | `IndexConverterRegistry` | Discovers all `IndexConverter` beans; validates no duplicate entity class registrations at startup |
-| `ReindexContextAspect` | `@Around` advice for `@ReindexContext`; manages `ReindexContextHolder` lifecycle and publishes `ReindexBatchEvent` |
+| `ReindexContextAspect` | `@Around` advice for `@ReindexContext`; manages `ReindexContextHolder` lifecycle; calls `ReindexService`, all `IndexSink` beans, and matching `EntityIndexListener` beans per entity class |
 | `ReindexParamAspect` | `@AfterReturning` advice on all Spring beans; collects `@ReindexId`-annotated parameters into the active context |
 | `ReindexService` | Loads entities from the database (chunked JPA Criteria queries) and converts them via `IndexConverterRegistry` |
-| `ReindexingListener` | `@EventListener` for `ReindexBatchEvent`; delegates to `ReindexService` then fans out to all `IndexSink` beans |
 
 No beans are registered unless `@EnableEntityIndexing` is present.
 
