@@ -53,8 +53,15 @@ class ReindexContextAspect(
         }
 
         if (isRoot) {
-            log.debug("Starting reindex context method={}", pjp.signature)
+            val outerActive = ReindexContextHolder.isActive()
+            if (outerActive) {
+                log.debug("Suspending outer reindex context, starting fresh scope method={}", pjp.signature)
+            } else {
+                log.debug("Starting reindex context method={}", pjp.signature)
+            }
             ReindexContextHolder.start()
+        } else {
+            log.debug("Joining outer reindex context method={}", pjp.signature)
         }
 
         var completed = false
@@ -95,9 +102,23 @@ class ReindexContextAspect(
     }
 
     private fun reindex(entityClass: KClass<*>, ids: Set<String>) {
-        log.info("Reindex triggered entity={}", entityClass.simpleName)
+        log.debug("Reindex triggered entity={} idCount={}", entityClass.simpleName, ids.size)
         val documents = reindexService.reindex(entityClass = entityClass, ids = ids)
-        sinks.forEach { it.push(entityClass = entityClass, documents = documents) }
-        listenerRegistry.getFor(entityClass).forEach { it.onReindex(documents) }
+        if (documents.isEmpty()) {
+            log.debug("No documents produced for entity={} — sinks and listeners will not be called", entityClass.simpleName)
+            return
+        }
+        sinks.forEach { sink ->
+            log.debug("Pushing to sink={} entity={} documentCount={}", sink.javaClass.simpleName, entityClass.simpleName, documents.size)
+            sink.push(entityClass = entityClass, documents = documents)
+        }
+        listenerRegistry.getFor(entityClass).also { listeners ->
+            if (listeners.isEmpty()) {
+                log.debug("No EntityIndexListeners registered for entity={}", entityClass.simpleName)
+            }
+        }.forEach { listener ->
+            log.debug("Notifying listener={} entity={} documentCount={}", listener.javaClass.simpleName, entityClass.simpleName, documents.size)
+            listener.onReindex(documents)
+        }
     }
 }

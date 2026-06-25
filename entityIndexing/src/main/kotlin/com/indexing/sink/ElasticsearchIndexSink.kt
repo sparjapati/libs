@@ -1,6 +1,7 @@
 package com.indexing.sink
 
 import com.indexing.core.AbstractEntityIndex
+import org.slf4j.LoggerFactory
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations
 import kotlin.reflect.KClass
 
@@ -13,8 +14,12 @@ class ElasticsearchIndexSink(
     private val elasticsearchOperations: ElasticsearchOperations,
 ) : IndexSink {
 
+    private val log = LoggerFactory.getLogger(javaClass)
+
     override fun push(entityClass: KClass<*>, documents: List<AbstractEntityIndex>) {
         if (documents.isEmpty()) return
+        log.debug("Saving to Elasticsearch entity={} documentCount={}", entityClass.simpleName, documents.size)
         elasticsearchOperations.save(documents)
+        log.debug("Saved to Elasticsearch entity={} documentCount={}", entityClass.simpleName, documents.size)
     }
 }

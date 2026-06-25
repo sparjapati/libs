@@ -28,9 +28,37 @@ class ReindexParamAspect {
         returning = "returnValue",
     )
     fun collect(joinPoint: JoinPoint, returnValue: Any?) {
-        if (!ReindexContextHolder.isActive()) return
-
         val method = (joinPoint.signature as MethodSignature).method
+
+        if (!ReindexContextHolder.isActive()) {
+            if (log.isDebugEnabled) {
+                val ignored = mutableMapOf<String, MutableList<String>>()
+                methodAnnotationCache.getOrPut(method) {
+                    Optional.ofNullable(AnnotationUtils.findAnnotation(method, ReindexId::class.java))
+                }.orElse(null)?.let { annotation ->
+                    toIds(returnValue)?.let { ids ->
+                        ignored.getOrPut(annotation.entity.simpleName ?: "?") { mutableListOf() }.addAll(ids)
+                    }
+                }
+                method.parameters.indices.forEach { index ->
+                    paramAnnotationCache.getOrPut(method to index) {
+                        Optional.ofNullable(findParamAnnotation(method, index))
+                    }.orElse(null)?.let { annotation ->
+                        toIds(joinPoint.args[index])?.let { ids ->
+                            ignored.getOrPut(annotation.entity.simpleName ?: "?") { mutableListOf() }.addAll(ids)
+                        }
+                    }
+                }
+                if (ignored.isNotEmpty()) {
+                    log.debug(
+                        "Reindex IDs will be ignored — no active @ReindexContext scope method={} entities={}",
+                        method.name,
+                        ignored,
+                    )
+                }
+            }
+            return
+        }
 
         collectFromReturnValue(method, returnValue)
         collectFromParameters(method, joinPoint.args)
@@ -80,6 +108,12 @@ class ReindexParamAspect {
                 }
             }
         }
+    }
+
+    private fun toIds(value: Any?): List<String>? = when (value) {
+        is String        -> listOf(value)
+        is Collection<*> -> value.map { it.toString() }.takeIf { it.isNotEmpty() }
+        else             -> null
     }
 
     // Checks the concrete method parameter first, then searches interface method parameters.
