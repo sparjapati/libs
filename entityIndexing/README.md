@@ -167,6 +167,8 @@ class UserService(
 
 The `self` reference is required because the marker method must be called through the Spring proxy for the aspect to intercept it.
 
+`@ReindexContext` can also be declared on an interface method — it will be found through the interface hierarchy regardless of whether the proxy is JDK or CGLIB.
+
 ---
 
 ## Annotations
@@ -195,11 +197,35 @@ fun reindexCriticalEntity(id: String) { ... }
 
 ### @ReindexId
 
+Registers entity IDs for reindexing. Can be placed on a **parameter** or on the **method itself** (return value):
+
 ```kotlin
-fun markerMethod(@ReindexId(UserEntity::class) ids: List<String>) {}
+// parameter — ID(s) known before the call
+fun reindexUsers(@ReindexId(UserEntity::class) ids: List<String>) {}
+
+// return value — ID produced by the call (e.g. a save that generates the ID)
+@ReindexId(UserEntity::class)
+fun saveAndReturnId(request: CreateUserRequest): String = repo.save(request.toEntity()).id
 ```
 
-Marks a method parameter (type `String` or `Collection<*>`) whose value(s) should be registered for reindexing. The aspect collects these values only when a `@ReindexContext` scope is active — calls outside a scope are ignored. The `entity` parameter is the JPA entity `KClass` that identifies which `IndexConverter` to use.
+Both `String` and `Collection<*>` are supported. The aspect collects these values only when a `@ReindexContext` scope is active — calls outside a scope are silently ignored.
+
+`@ReindexId` can be declared on interface methods and will be found through the interface hierarchy on CGLIB proxies.
+
+### Programmatic API
+
+As an alternative to the marker method pattern, IDs can be registered directly:
+
+```kotlin
+ReindexContextHolder.register<UserEntity>(id)           // single
+ReindexContextHolder.register<UserEntity>(id1, id2)     // vararg
+ReindexContextHolder.register<UserEntity>(ids)          // collection
+ReindexContextHolder.register(UserEntity::class, id)    // KClass overloads
+ReindexContextHolder.register(UserEntity::class, id1, id2)
+ReindexContextHolder.register(UserEntity::class, ids)
+```
+
+Only has effect when called inside an active `@ReindexContext` scope.
 
 ---
 
