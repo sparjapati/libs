@@ -5,8 +5,6 @@ import com.pageFiltering.PageRequestMetaRegistry
 import com.pageFiltering.PageRequestResolver
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.annotation.Bean
-import org.springframework.web.method.support.HandlerMethodArgumentResolver
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
 
 /**
@@ -14,6 +12,8 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * no `@Enable` annotation required on the importing application.
  *
  * Registers [PageRequestResolver], [PageRequestMetaRegistry], and [PageRequestMetaController].
+ * The consuming application is responsible for adding [PageRequestResolver] to Spring MVC's
+ * argument resolver chain (typically via [org.springframework.web.servlet.config.annotation.WebMvcConfigurer]).
  */
 @AutoConfiguration
 class PageFilteringConfiguration {
@@ -30,13 +30,4 @@ class PageFilteringConfiguration {
     fun pageRequestMetaController(
         registry: PageRequestMetaRegistry,
     ): PageRequestMetaController = PageRequestMetaController(registry)
-
-    @Bean
-    fun pageFilteringWebMvcConfigurer(
-        resolver: PageRequestResolver,
-    ): WebMvcConfigurer = object : WebMvcConfigurer {
-        override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
-            resolvers.add(resolver)
-        }
-    }
 }
