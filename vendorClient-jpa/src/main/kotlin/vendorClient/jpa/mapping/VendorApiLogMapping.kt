@@ -2,7 +2,7 @@ package vendorClient.jpa.mapping
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sparjapati.vendorClient.logging.VendorApiLog
+import vendorClient.logging.VendorApiLog
 import vendorClient.jpa.entity.VendorApiLogEntity
 
 private val mapper = ObjectMapper()

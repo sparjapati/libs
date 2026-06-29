@@ -1,6 +1,6 @@
 package vendorClient.jpa.logging
 
-import com.sparjapati.vendorClient.logging.VendorApiLog
+import vendorClient.logging.VendorApiLog
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

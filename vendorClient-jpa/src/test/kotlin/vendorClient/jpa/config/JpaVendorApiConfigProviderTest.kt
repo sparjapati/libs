@@ -1,6 +1,6 @@
 package vendorClient.jpa.config
 
-import com.sparjapati.vendorClient.VendorApiKey
+import vendorClient.VendorApiKey
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

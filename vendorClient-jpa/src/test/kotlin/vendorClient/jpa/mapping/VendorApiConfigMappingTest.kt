@@ -1,7 +1,7 @@
 package vendorClient.jpa.mapping
 
-import com.sparjapati.vendorClient.config.VendorApiConfig
-import com.sparjapati.vendorClient.config.VendorApiResilienceConfig
+import vendorClient.config.VendorApiConfig
+import vendorClient.config.VendorApiResilienceConfig
 import vendorClient.jpa.entity.VendorApiConfigEntity
 import java.time.Instant
 import org.junit.jupiter.api.Test

@@ -1,8 +1,8 @@
 package vendorClient.jpa.config
 
-import com.sparjapati.vendorClient.VendorApiKey
-import com.sparjapati.vendorClient.config.VendorApiConfig
-import com.sparjapati.vendorClient.config.VendorApiConfigProvider
+import vendorClient.VendorApiKey
+import vendorClient.config.VendorApiConfig
+import vendorClient.config.VendorApiConfigProvider
 import org.springframework.transaction.annotation.Transactional
 import vendorClient.jpa.mapping.toDto
 import vendorClient.jpa.repository.VendorApiConfigRepository

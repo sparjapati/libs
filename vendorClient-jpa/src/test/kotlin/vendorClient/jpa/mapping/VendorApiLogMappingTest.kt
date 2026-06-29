@@ -1,6 +1,6 @@
 package vendorClient.jpa.mapping
 
-import com.sparjapati.vendorClient.logging.VendorApiLog
+import vendorClient.logging.VendorApiLog
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull

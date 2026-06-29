@@ -1,8 +1,8 @@
 package vendorClient.jpa.logging
 
-import com.sparjapati.vendorClient.logging.VendorApiLog
-import com.sparjapati.vendorClient.logging.VendorApiLogPage
-import com.sparjapati.vendorClient.logging.VendorApiLogQuery
+import vendorClient.logging.VendorApiLog
+import vendorClient.logging.VendorApiLogPage
+import vendorClient.logging.VendorApiLogQuery
 import org.springframework.data.domain.PageRequest
 import org.springframework.transaction.annotation.Transactional
 import vendorClient.jpa.mapping.toDto
