@@ -13,10 +13,6 @@ data class VendorClientSettings(
     val rateLimiterKeyPrefix: String = "vendorApiRate",
     /** Headers whose values are replaced with "***" in logs. */
     val sensitiveHeaders: Set<String> = DEFAULT_SENSITIVE_HEADERS,
-    /** Maximum bytes of request/response body captured in [com.sparjapati.vendorClient.logging.VendorApiLog]. */
-    val apiLogMaxBodyBytes: Long = 32 * 1024,
-    /** Maximum bytes printed by the HTTP logging interceptor. */
-    val httpLogMaxBodyBytes: Long = 1_000,
     val connectTimeoutSeconds: Long = 30,
     val readTimeoutSeconds: Long = 30,
     val writeTimeoutSeconds: Long = 30,

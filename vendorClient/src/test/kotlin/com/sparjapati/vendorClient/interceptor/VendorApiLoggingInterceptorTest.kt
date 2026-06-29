@@ -21,24 +21,32 @@ class VendorApiLoggingInterceptorTest {
     private val sink = VendorApiLogSink { log -> capturedLog.captured = log }
     private val settings = VendorClientSettings()
 
-    private fun chain(responseCode: Int = 200, throwError: Exception? = null): Interceptor.Chain {
+    private fun chain(
+        responseCode: Int = 200,
+        throwError: Exception? = null,
+        contentType: String = "application/json",
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): Interceptor.Chain {
         val method: java.lang.reflect.Method = mockk()
         every { method.getAnnotation(TraceableApi::class.java) } returns TraceableApi(TestApi::class, "MY_API")
         val invocation: Invocation = mockk()
         every { invocation.method() } returns method
 
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url("https://example.com/path")
             .header("X-Request-Id", "req-abc")
             .tag(Invocation::class.java, invocation)
-            .build()
+
+        extraHeaders.forEach { (name, value) -> requestBuilder.header(name, value) }
+
+        val request = requestBuilder.build()
 
         val chain: Interceptor.Chain = mockk()
         every { chain.request() } returns request
         if (throwError != null) {
             every { chain.proceed(any()) } throws throwError
         } else {
-            val body = """{"ok":true}""".toResponseBody("application/json".toMediaType())
+            val body = """{"ok":true}""".toResponseBody(contentType.toMediaType())
             val response = Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
                 .code(responseCode).message("OK").body(body).build()
             every { chain.proceed(any()) } returns response
@@ -67,9 +75,15 @@ class VendorApiLoggingInterceptorTest {
         assertEquals("timeout", capturedLog.captured.errorMessage)
     }
 
-    @Test fun `masks sensitive headers`() {
-        VendorApiLoggingInterceptor(settings, sink).intercept(chain())
-        // No sensitive headers on the test request, just verify the log was saved
-        assertNotNull(capturedLog.captured)
+    @Test fun `logs binary response body as 'binary response only'`() {
+        VendorApiLoggingInterceptor(settings, sink).intercept(chain(contentType = "application/octet-stream"))
+        assertEquals("binary response only", capturedLog.captured.responseBody)
+    }
+
+    @Test fun `saves raw unmasked headers`() {
+        VendorApiLoggingInterceptor(settings, sink).intercept(
+            chain(extraHeaders = mapOf("Authorization" to "Bearer secret"))
+        )
+        assertEquals(listOf("Bearer secret"), capturedLog.captured.requestHeaders["Authorization"])
     }
 }
