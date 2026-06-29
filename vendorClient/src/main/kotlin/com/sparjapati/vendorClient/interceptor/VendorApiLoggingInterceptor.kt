@@ -40,7 +40,9 @@ class VendorApiLoggingInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val apiName = VendorApiAnnotationResolver.resolve(request)?.name ?: "UNKNOWN"
+        val api = VendorApiAnnotationResolver.resolve(request)
+            ?: return chain.proceed(request)
+        val apiName = api.name
         val requestId = request.header(settings.requestIdHeader) ?: ""
 
         val requestBody = request.body?.let { body ->

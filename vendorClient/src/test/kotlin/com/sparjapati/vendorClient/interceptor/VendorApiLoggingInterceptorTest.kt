@@ -8,6 +8,7 @@ import com.sparjapati.vendorClient.logging.VendorApiLogSink
 import io.mockk.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Invocation
 import java.io.IOException
@@ -25,6 +26,7 @@ class VendorApiLoggingInterceptorTest {
         responseCode: Int = 200,
         throwError: Exception? = null,
         contentType: String = "application/json",
+        requestContentType: String = "application/json",
         extraHeaders: Map<String, String> = emptyMap(),
     ): Interceptor.Chain {
         val method: java.lang.reflect.Method = mockk()
@@ -35,6 +37,7 @@ class VendorApiLoggingInterceptorTest {
         val requestBuilder = Request.Builder()
             .url("https://example.com/path")
             .header("X-Request-Id", "req-abc")
+            .post("""{"test":true}""".toRequestBody(requestContentType.toMediaType()))
             .tag(Invocation::class.java, invocation)
 
         extraHeaders.forEach { (name, value) -> requestBuilder.header(name, value) }
@@ -80,10 +83,28 @@ class VendorApiLoggingInterceptorTest {
         assertEquals("binary response only", capturedLog.captured.responseBody)
     }
 
+    @Test fun `logs binary request body as 'binary response only'`() {
+        VendorApiLoggingInterceptor(settings, sink).intercept(chain(requestContentType = "application/octet-stream"))
+        assertEquals("binary response only", capturedLog.captured.requestBody)
+    }
+
     @Test fun `saves raw unmasked headers`() {
         VendorApiLoggingInterceptor(settings, sink).intercept(
             chain(extraHeaders = mapOf("Authorization" to "Bearer secret"))
         )
         assertEquals(listOf("Bearer secret"), capturedLog.captured.requestHeaders["Authorization"])
+    }
+
+    @Test fun `does not log when no TraceableApi annotation`() {
+        val mockSink = mockk<VendorApiLogSink>()
+        val plainRequest = Request.Builder().url("https://example.com").build()
+        val mockChain = mockk<Interceptor.Chain>()
+        every { mockChain.request() } returns plainRequest
+        val response = Response.Builder().request(plainRequest).protocol(Protocol.HTTP_1_1)
+            .code(200).message("OK").body("{}".toResponseBody()).build()
+        every { mockChain.proceed(any()) } returns response
+
+        VendorApiLoggingInterceptor(settings, mockSink).intercept(mockChain)
+        verify(exactly = 0) { mockSink.save(any()) }
     }
 }
