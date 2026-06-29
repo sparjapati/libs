@@ -1,6 +1,7 @@
 package com.sparjapati.vendorClient.interceptor
 
 import com.sparjapati.vendorClient.config.DEFAULT_SENSITIVE_HEADERS
+import com.sparjapati.vendorClient.logging.BINARY_BODY_PLACEHOLDER
 import com.sparjapati.vendorClient.logging.maskSensitive
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -56,7 +57,7 @@ class HttpLoggingInterceptor(
                     body.writeTo(buffer)
                     sb.append("\n${buffer.readUtf8()}\n")
                 } else {
-                    sb.append("\nbinary response only\n")
+                    sb.append("\n$BINARY_BODY_PLACEHOLDER\n")
                 }
             }
         }
@@ -78,7 +79,7 @@ class HttpLoggingInterceptor(
             val contentEncoding = response.header("Content-Encoding")
             val raw = body?.bytes() ?: ByteArray(0)
             val text = when {
-                isBinary(response.body?.contentType()?.toString()) -> "binary response only"
+                isBinary(response.body?.contentType()?.toString()) -> BINARY_BODY_PLACEHOLDER
                 contentEncoding == "gzip" -> {
                     val buf = Buffer().write(raw)
                     val gzip = Buffer()

@@ -2,6 +2,7 @@ package com.sparjapati.vendorClient.interceptor
 
 import com.sparjapati.vendorClient.annotation.VendorApiAnnotationResolver
 import com.sparjapati.vendorClient.config.VendorClientSettings
+import com.sparjapati.vendorClient.logging.BINARY_BODY_PLACEHOLDER
 import com.sparjapati.vendorClient.logging.VendorApiLog
 import com.sparjapati.vendorClient.logging.VendorApiLogSink
 import okhttp3.Interceptor
@@ -26,16 +27,18 @@ import kotlin.time.TimeSource
  * **Exception safety**: when [chain.proceed] throws, the log is saved with `success = false` and
  * `errorMessage = e.message` before the exception is rethrown. The log is always saved exactly once.
  *
- * **Request ID**: read from the outbound request header named [VendorClientSettings.requestIdHeader]
- * — this is whatever value [TraceForwardingInterceptor] already stamped on the request, so the two
- * interceptors must be ordered with [TraceForwardingInterceptor] first.
+ * **Request ID**: sourced from [requestIdProvider] rather than the outbound header, so it always
+ * reflects the original inbound Spring request ID rather than the per-attempt trace ID that
+ * [TraceForwardingInterceptor] appends.
  *
  * @param settings global settings for header names and sensitive header set
  * @param logSink persistence port; called once per request (even on exception)
+ * @param requestIdProvider returns the current inbound request ID; defaults to `{ null }` (empty string stored)
  */
 class VendorApiLoggingInterceptor(
     private val settings: VendorClientSettings,
     private val logSink: VendorApiLogSink,
+    private val requestIdProvider: () -> String? = { null },
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -43,11 +46,11 @@ class VendorApiLoggingInterceptor(
         val api = VendorApiAnnotationResolver.resolve(request)
             ?: return chain.proceed(request)
         val apiName = api.name
-        val requestId = request.header(settings.requestIdHeader) ?: ""
+        val requestId = requestIdProvider() ?: ""
 
         val requestBody = request.body?.let { body ->
             if (isBinary(body.contentType()?.toString())) {
-                "binary response only"
+                BINARY_BODY_PLACEHOLDER
             } else {
                 val buffer = Buffer()
                 body.writeTo(buffer)
@@ -60,7 +63,7 @@ class VendorApiLoggingInterceptor(
             val response = chain.proceed(request)
             val durationMs = mark.elapsedNow().inWholeMilliseconds
             val responseBody = if (isBinary(response.body?.contentType()?.toString())) {
-                "binary response only"
+                BINARY_BODY_PLACEHOLDER
             } else {
                 response.peekBody(Long.MAX_VALUE)?.string()
             }

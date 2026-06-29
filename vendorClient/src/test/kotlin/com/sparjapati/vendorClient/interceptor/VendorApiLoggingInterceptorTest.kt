@@ -3,6 +3,7 @@ package com.sparjapati.vendorClient.interceptor
 import com.sparjapati.vendorClient.VendorApiKey
 import com.sparjapati.vendorClient.annotation.TraceableApi
 import com.sparjapati.vendorClient.config.VendorClientSettings
+import com.sparjapati.vendorClient.logging.BINARY_BODY_PLACEHOLDER
 import com.sparjapati.vendorClient.logging.VendorApiLog
 import com.sparjapati.vendorClient.logging.VendorApiLogSink
 import io.mockk.*
@@ -58,7 +59,8 @@ class VendorApiLoggingInterceptorTest {
     }
 
     @Test fun `logs successful response`() {
-        VendorApiLoggingInterceptor(settings, sink).intercept(chain(200))
+        VendorApiLoggingInterceptor(settings = settings, logSink = sink, requestIdProvider = { "req-abc" })
+            .intercept(chain(200))
         assertEquals("MY_API", capturedLog.captured.apiName)
         assertEquals("req-abc", capturedLog.captured.requestId)
         assertTrue(capturedLog.captured.success)
@@ -80,12 +82,12 @@ class VendorApiLoggingInterceptorTest {
 
     @Test fun `logs binary response body as 'binary response only'`() {
         VendorApiLoggingInterceptor(settings, sink).intercept(chain(contentType = "application/octet-stream"))
-        assertEquals("binary response only", capturedLog.captured.responseBody)
+        assertEquals(BINARY_BODY_PLACEHOLDER, capturedLog.captured.responseBody)
     }
 
     @Test fun `logs binary request body as 'binary response only'`() {
         VendorApiLoggingInterceptor(settings, sink).intercept(chain(requestContentType = "application/octet-stream"))
-        assertEquals("binary response only", capturedLog.captured.requestBody)
+        assertEquals(BINARY_BODY_PLACEHOLDER, capturedLog.captured.requestBody)
     }
 
     @Test fun `saves raw unmasked headers`() {
