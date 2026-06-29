@@ -13,6 +13,13 @@ jakarta-persistence = "3.1.0"
 poi = "5.3.0"
 commons-csv = "1.12.0"
 
+okhttp3       = "4.12.0"
+retrofit      = "2.11.0"
+resilience4j  = "2.3.0"
+lettuce       = "6.4.0"
+junit-jupiter = "5.11.0"
+mockk         = "1.13.12"
+
 [libraries]
 
 spring-framework-bom = { module = "org.springframework:spring-framework-bom", version.ref = "spring-framework-bom" }
@@ -37,9 +44,20 @@ spring-boot-batch    = { module = "org.springframework.boot:spring-boot-starter-
 poi-ooxml            = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 commons-csv          = { module = "org.apache.commons:commons-csv", version.ref = "commons-csv" }
 
+okhttp3                     = { module = "com.squareup.okhttp3:okhttp",                              version.ref = "okhttp3" }
+retrofit-core               = { module = "com.squareup.retrofit2:retrofit",                          version.ref = "retrofit" }
+resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker",       version.ref = "resilience4j" }
+resilience4j-retry          = { module = "io.github.resilience4j:resilience4j-retry",                version.ref = "resilience4j" }
+resilience4j-kotlin         = { module = "io.github.resilience4j:resilience4j-kotlin",               version.ref = "resilience4j" }
+lettuce-core                = { module = "io.lettuce:lettuce-core",                                  version.ref = "lettuce" }
+junit-jupiter               = { module = "org.junit.jupiter:junit-jupiter",                          version.ref = "junit-jupiter" }
+mockk                       = { module = "io.mockk:mockk",                                           version.ref = "mockk" }
+kotlin-test-junit5          = { module = "org.jetbrains.kotlin:kotlin-test-junit5",                  version.ref = "kotlin" }
+
 [bundles]
 spring-core = [
     "spring-context",
     "spring-aop",
     "spring-tx",
 ]
+resilience4j = ["resilience4j-circuitbreaker", "resilience4j-retry", "resilience4j-kotlin"]

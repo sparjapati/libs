@@ -25,3 +25,12 @@ project(":entityIndexing") {
 project(":pageFiltering") {
     version = property("pageFilteringVersion") as String
 }
+project(":vendorClient") {
+    version = property("vendorClientVersion") as String
+}
+project(":vendorClient-redis") {
+    version = property("vendorClientVersion") as String
+}
+project(":vendorClient-jpa") {
+    version = property("vendorClientVersion") as String
+}
