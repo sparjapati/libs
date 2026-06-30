@@ -28,9 +28,12 @@ project(":pageFiltering") {
 project(":vendorClient") {
     version = property("vendorClientVersion") as String
 }
-project(":vendorClient-redis") {
+project(":vendorClient-apiconfig-jpa") {
     version = property("vendorClientVersion") as String
 }
-project(":vendorClient-jpa") {
+project(":vendorClient-apilog-jpa") {
+    version = property("vendorClientVersion") as String
+}
+project(":vendorClient-ratelimiter-redis") {
     version = property("vendorClientVersion") as String
 }
