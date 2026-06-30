@@ -111,7 +111,7 @@ Tokens consumed **once per logical request** (before retries). On breach the API
 temporary cooldown and `onTempDisable` is called with the expiry instant.
 
 `InMemoryRateLimitStore` is included for development and single-node use. For multi-instance
-deployments, use `vendorClient-redis` which provides `RedisRateLimitStore` backed by a Lua
+deployments, use `vendorClient-ratelimiter-redis` which provides `RedisRateLimitStore` backed by a Lua
 atomic sliding window.
 
 > **Multi-instance note:** Each JVM maintains an independent window. With _N_ instances the
@@ -222,11 +222,27 @@ Implement these interfaces to plug in persistence or custom stores:
 
 ## Modules
 
-| Artifact | Contents | Status |
+All modules self-register via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+— no `@Enable*` annotation needed in the host application.
+
+| Artifact | Package | Contents |
 |---|---|---|
-| `vendorClient` | Core — interceptors, Retrofit adapter, builder, in-memory rate limiter, Spring autoconfiguration | Available |
-| `vendorClient-jpa` | `JpaVendorApiConfigProvider`, `JpaVendorApiConfigManager`, `JpaVendorApiLogSink`, `JpaVendorApiLogQuery`, `@EnableVendorClientJpa` | Phase 2 |
-| `vendorClient-redis` | `RedisRateLimitStore` (Lua atomic sliding window), `VendorClientRedisAutoConfiguration` | Phase 3 |
+| `vendorClient` | `vendorClient.*` | Core — interceptors, Retrofit adapter, builder, in-memory rate limiter, Spring autoconfiguration |
+| `vendorClient-apiconfig-jpa` | `vendorClient.apiconfig.jpa.*` | `JpaVendorApiConfigProvider`, `JpaVendorApiConfigManager` — JPA-backed config store |
+| `vendorClient-apilog-jpa` | `vendorClient.apilog.jpa.*` | `JpaVendorApiLogSink`, `JpaVendorApiLogQuery` — JPA-backed structured log persistence |
+| `vendorClient-ratelimiter-redis` | `vendorClient.ratelimiter.redis.*` | `RedisRateLimitStore` — Lua atomic sliding-window rate limiter backed by Redis |
+
+### Typical dependency set
+
+```kotlin
+// build.gradle.kts
+implementation("com.sparjapati:vendorClient:0.0.1")
+implementation("com.sparjapati:vendorClient-apiconfig-jpa:0.0.1")   // if using JPA config
+implementation("com.sparjapati:vendorClient-apilog-jpa:0.0.1")      // if using JPA log persistence
+implementation("com.sparjapati:vendorClient-ratelimiter-redis:0.0.1") // if using Redis rate limiter
+```
+
+Modules are independently consumable — include only what you need.
 
 ---
 
