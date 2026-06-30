@@ -40,6 +40,7 @@ aspectj-weaver = { module = "org.aspectj:aspectjweaver", version.ref = "aspectj"
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot" }
+spring-boot-persistence   = { module = "org.springframework.boot:spring-boot-persistence",   version.ref = "spring-boot" }
 spring-boot-batch    = { module = "org.springframework.boot:spring-boot-starter-batch" }
 poi-ooxml            = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
 commons-csv          = { module = "org.apache.commons:commons-csv", version.ref = "commons-csv" }
