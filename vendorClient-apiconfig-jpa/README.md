@@ -26,9 +26,13 @@ automatically — no `@Enable*` annotation or explicit bean declaration required
 | Bean | Interface | Purpose |
 |---|---|---|
 | `JpaVendorApiConfigProvider` | `VendorApiConfigProvider` | Reads `VendorApiConfig` from DB per API key |
-| `JpaVendorApiConfigManager` | `VendorApiConfigManager` | Creates, updates, and temp-disables API configs |
+| `JpaVendorApiConfigManager` | `VendorApiConfigManager` | Creates, updates, lists, and temp-disables API configs |
 
 Both beans are `@ConditionalOnMissingBean` — declare your own bean to override either.
+
+`VendorApiConfigManager.listConfigs()` returns entries keyed by the raw `apiName: String` rather
+than a `VendorApiKey` instance — the JPA layer only ever persists the name, and has no way to
+resolve it back to a caller-defined `VendorApiKey` enum constant.
 
 The repository and entity are scanned automatically. No `@EntityScan` or `@EnableJpaRepositories`
 extension is needed in the host application for these classes.

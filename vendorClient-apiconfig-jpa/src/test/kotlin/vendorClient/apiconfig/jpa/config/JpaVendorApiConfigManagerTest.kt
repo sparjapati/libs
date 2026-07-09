@@ -3,6 +3,7 @@ package vendorClient.apiconfig.jpa.config
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import vendorClient.VendorApiKey
@@ -63,5 +64,11 @@ class JpaVendorApiConfigManagerTest {
         val until = Instant.now().plusSeconds(300)
         manager.tempDisable(api = Api.STRIPE, until = until)
         verify { repository.save(match { it.tempDisabledUntil == until }) }
+    }
+
+    @Test fun `listConfigs maps every stored entity`() {
+        every { repository.findAll() } returns listOf(entity("STRIPE"), entity("PAYPAL"))
+        val entries = manager.listConfigs()
+        assertEquals(listOf("STRIPE", "PAYPAL"), entries.map { it.apiName })
     }
 }

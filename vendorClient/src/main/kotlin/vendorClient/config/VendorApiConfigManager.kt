@@ -21,4 +21,18 @@ interface VendorApiConfigManager {
      * Passed as `configManager::tempDisable` to the builder's rate-limiter `onTempDisable` callback.
      */
     fun tempDisable(api: VendorApiKey, until: Instant)
+
+    /**
+     * Lists all stored config entries.
+     *
+     * Returns [VendorApiConfigEntry.apiName] rather than a [VendorApiKey] instance — implementations
+     * only persist the raw name, and have no way to resolve it back to a caller-defined enum constant.
+     */
+    fun listConfigs(): List<VendorApiConfigEntry>
 }
+
+/** A stored config entry paired with the raw API name it was persisted under. */
+data class VendorApiConfigEntry(
+    val apiName: String,
+    val config: VendorApiConfig,
+)

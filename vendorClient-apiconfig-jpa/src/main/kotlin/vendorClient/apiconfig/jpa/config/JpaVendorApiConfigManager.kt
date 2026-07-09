@@ -2,9 +2,11 @@ package vendorClient.apiconfig.jpa.config
 
 import org.springframework.transaction.annotation.Transactional
 import vendorClient.VendorApiKey
+import vendorClient.apiconfig.jpa.mapping.toDto
 import vendorClient.apiconfig.jpa.mapping.toEntity
 import vendorClient.apiconfig.jpa.repository.VendorApiConfigRepository
 import vendorClient.config.VendorApiConfig
+import vendorClient.config.VendorApiConfigEntry
 import vendorClient.config.VendorApiConfigManager
 import java.time.Instant
 
@@ -58,4 +60,8 @@ open class JpaVendorApiConfigManager(
         existing.tempDisabledUntil = until
         repository.save(existing)
     }
+
+    @Transactional(readOnly = true)
+    override fun listConfigs(): List<VendorApiConfigEntry> =
+        repository.findAll().map { VendorApiConfigEntry(apiName = it.apiName, config = it.toDto()) }
 }
