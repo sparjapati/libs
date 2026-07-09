@@ -17,4 +17,8 @@ class VendorClientApiConfigJpaAutoConfigurationTest {
     @Test fun `manager bean is created`() {
         assertNotNull(config.jpaVendorApiConfigManager(repository))
     }
+
+    @Test fun `temp-disable cleanup scheduler bean is created`() {
+        assertNotNull(config.vendorApiConfigTempDisableCleanupScheduler(repository))
+    }
 }

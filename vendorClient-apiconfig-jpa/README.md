@@ -27,8 +27,9 @@ automatically — no `@Enable*` annotation or explicit bean declaration required
 |---|---|---|
 | `JpaVendorApiConfigProvider` | `VendorApiConfigProvider` | Reads `VendorApiConfig` from DB per API key |
 | `JpaVendorApiConfigManager` | `VendorApiConfigManager` | Creates, updates, lists, and temp-disables API configs |
+| `VendorApiConfigTempDisableCleanupScheduler` | — | Periodically clears `tempDisabledUntil` once its cooldown has passed |
 
-Both beans are `@ConditionalOnMissingBean` — declare your own bean to override either.
+All three beans are `@ConditionalOnMissingBean` — declare your own bean to override any of them.
 
 `VendorApiConfig` now carries its own `apiName: String`. `createConfig`/`updateConfig` derive the
 target row from `config.apiName`; `getConfig`/`tempDisable` still take a separate `api: VendorApiKey`
@@ -71,6 +72,25 @@ Schema is managed by your application's DDL strategy (`spring.jpa.hibernate.ddl-
 
 `JpaVendorApiConfigProvider` is intentionally cache-free — it reads from the DB on every call.
 Wrap it with a caching decorator (e.g. Spring Cache, `dbstore`) if you need in-process caching.
+
+---
+
+## Temp-disable cleanup
+
+`VendorApiConfigTempDisableCleanupScheduler` runs on a fixed rate and clears `tempDisabledUntil`
+back to `null` on every row whose cooldown has already passed. This is a cleanup convenience, not
+a correctness requirement — `VendorApiConfig.isTemporarilyDisabled` already treats a past
+`tempDisabledUntil` as "not disabled" regardless of whether this job has run, so a delayed cleanup
+never causes incorrect rate-limit enforcement. It exists so stored rows (and anything reading them
+directly, e.g. `listConfigs()` or an admin UI) reflect current state.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `vendor-client.api-config.temp-disable-cleanup.interval-ms` | `60000` | Fixed-rate interval between cleanup runs |
+| `vendor-client.api-config.temp-disable-cleanup.enabled` | `true` | Set to `false` to disable the scheduler entirely |
+
+Requires Spring scheduling infrastructure (`@EnableScheduling`, applied automatically by this
+module's autoconfiguration) to be active in the application context.
 
 ---
 
