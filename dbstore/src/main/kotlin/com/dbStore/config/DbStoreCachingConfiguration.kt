@@ -12,7 +12,7 @@ import com.dbStore.mysqlDbstore.repository.MysqlDbStoreCacheRepository
 import com.dbStore.mysqlDbstore.service.MysqlDbStoreCacheService
 import com.dbStore.service.DbStoreCacheSupport
 import com.dbStore.service.DbStoreService
-import jakarta.persistence.EntityManager
+import jakarta.persistence.EntityManagerFactory
 import org.springframework.aop.aspectj.AspectJExpressionPointcut
 import org.springframework.aop.support.DefaultPointcutAdvisor
 import org.springframework.context.annotation.Bean
@@ -21,6 +21,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy
 import org.springframework.context.annotation.ImportAware
 import org.springframework.core.type.AnnotationMetadata
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory
+import org.springframework.orm.jpa.SharedEntityManagerCreator
 import kotlin.reflect.KClass
 
 // Loaded exclusively via @Import from @EnableDbStoreCaching — no @ConditionalOnBean needed.
@@ -39,8 +40,10 @@ class DbStoreCachingConfiguration : ImportAware {
     }
 
     @Bean
-    fun mysqlDbStoreCacheRepository(entityManager: EntityManager): MysqlDbStoreCacheRepository =
-        JpaRepositoryFactory(entityManager).getRepository(MysqlDbStoreCacheRepository::class.java)
+    fun mysqlDbStoreCacheRepository(entityManagerFactory: EntityManagerFactory): MysqlDbStoreCacheRepository =
+        // EntityManager is not a resolvable singleton bean in Spring Boot 4; use EntityManagerFactory.
+        JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory))
+            .getRepository(MysqlDbStoreCacheRepository::class.java)
 
     @Bean
     fun dbStoreService(

@@ -9,7 +9,7 @@ import com.indexing.listener.EntityIndexListener
 import com.indexing.listener.EntityIndexListenerRegistry
 import com.indexing.service.ReindexService
 import com.indexing.sink.IndexSink
-import jakarta.persistence.EntityManager
+import jakarta.persistence.EntityManagerFactory
 import org.springframework.aop.aspectj.AspectJExpressionPointcut
 import org.springframework.aop.support.DefaultPointcutAdvisor
 import org.springframework.beans.factory.annotation.Autowired
@@ -20,6 +20,7 @@ import org.springframework.context.annotation.ImportAware
 import org.springframework.core.Ordered
 import org.springframework.core.env.Environment
 import org.springframework.core.type.AnnotationMetadata
+import org.springframework.orm.jpa.SharedEntityManagerCreator
 
 @Configuration
 @EnableAspectJAutoProxy(proxyTargetClass = true)
@@ -41,18 +42,20 @@ class EntityIndexingConfiguration(private val environment: Environment) : Import
 
     @Bean
     fun reindexService(
-        entityManager: EntityManager,
+        entityManagerFactory: EntityManagerFactory,
         registry: IndexConverterRegistry,
     ): ReindexService = ReindexService(
-        entityManager = entityManager,
+        // SharedEntityManagerCreator produces a thread-bound proxy compatible with @Transactional.
+        // EntityManager is not a resolvable singleton bean in Spring Boot 4 — EntityManagerFactory is.
+        entityManager = SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory),
         converterRegistry = registry,
         chunkSize = environment.getProperty("spring.jpa.properties.hibernate.jdbc.batch_size", Int::class.java, 50),
     )
 
     @Bean
     fun entityIndexListenerRegistry(
-        @Autowired(required = false) listeners: List<EntityIndexListener<*>> = emptyList(),
-    ): EntityIndexListenerRegistry = EntityIndexListenerRegistry(listeners)
+        @Autowired(required = false) listeners: List<EntityIndexListener<*>>? = null,
+    ): EntityIndexListenerRegistry = EntityIndexListenerRegistry(listeners.orEmpty())
 
     @Bean
     fun reindexParamAdvisor(): DefaultPointcutAdvisor =
@@ -62,9 +65,9 @@ class EntityIndexingConfiguration(private val environment: Environment) : Import
     fun reindexContextAdvisor(
         reindexService: ReindexService,
         listenerRegistry: EntityIndexListenerRegistry,
-        @Autowired(required = false) sinks: List<IndexSink> = emptyList(),
+        @Autowired(required = false) sinks: List<IndexSink>? = null,
     ): DefaultPointcutAdvisor =
-        DefaultPointcutAdvisor(buildPointcut(), ReindexContextAspect(reindexService, sinks, listenerRegistry))
+        DefaultPointcutAdvisor(buildPointcut(), ReindexContextAspect(reindexService, sinks.orEmpty(), listenerRegistry))
             .apply { order = Ordered.LOWEST_PRECEDENCE - 1 }
 
     // Builds the pointcut that limits interception to the application's own classes.
