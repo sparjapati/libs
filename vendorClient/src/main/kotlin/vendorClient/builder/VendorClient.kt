@@ -56,7 +56,7 @@ object VendorClient {
         /** Enables structured audit logging of every annotated request/response via [sink]. */
         fun apiLogging(sink: VendorApiLogSink) = apply { this.logSink = sink }
 
-        /** Enables debug HTTP logging. Defaults to an SLF4J debug logger if [log] is omitted. */
+        /** Enables HTTP traffic logging. Defaults to an SLF4J info-level logger if [log] is omitted. */
         fun httpLogging(
             level: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.BODY,
             log: (String) -> Unit = LoggerFactory.getLogger(HttpLoggingInterceptor::class.java)::info,

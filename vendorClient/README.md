@@ -41,7 +41,7 @@ interface StripeService {
 
     @TraceableApi(api = PaymentApi::class, name = "CHARGE")
     @POST("v1/charges")
-    fun createCharge(@Body body: ChargeRequest): Call<NetworkResponse<ChargeResponse>>
+    fun createCharge(@Body body: ChargeRequest): NetworkResponse<ChargeResponse>
 }
 ```
 
@@ -49,6 +49,11 @@ Methods without `@TraceableApi` are invisible to all vendor interceptors — the
 untouched with no rate limiting, circuit breaking, or logging.
 
 ### 3. Build the client
+
+`vendorClient` never registers a body `Converter.Factory` itself — it stays serialization-agnostic
+(no forced Gson/Jackson/Moshi dependency). Add your converter via `Retrofit.newBuilder()` after
+`.build()`; it carries over the base URL, `OkHttpClient`, and `RetrofitNetworkCallAdapterFactory`
+from the original instance, so you only need to add the converter:
 
 ```kotlin
 val stripe: StripeService = VendorClient.builder()
@@ -59,13 +64,23 @@ val stripe: StripeService = VendorClient.builder()
     .trace { requestContext.requestId() }
     .apiLogging(logSink)
     .build()
+    .newBuilder()
+    .addConverterFactory(GsonConverterFactory.create())
+    .build()
     .create(StripeService::class.java)
 ```
 
+Without a converter factory, `create(...)` throws `IllegalArgumentException: Could not locate
+ResponseBody converter` for any method returning `NetworkResponse<T>` where `T` isn't already
+handled by Retrofit's built-in converters (e.g. `T = String`).
+
 ### 4. Consume the response
 
+Calling the method runs the HTTP call **synchronously**, on the calling thread, and always
+returns a `NetworkResponse` — it never throws.
+
 ```kotlin
-stripe.createCharge(body).execute().body()!!
+stripe.createCharge(body)
     .onSuccess { charge -> println("Charged: ${charge.id}") }
     .onError   { err   ->
         when (err.exceptionType) {
@@ -77,6 +92,9 @@ stripe.createCharge(body).execute().body()!!
         }
     }
 ```
+
+Or, to throw on error instead of branching: `stripe.createCharge(body).orThrow()` — throws
+`VendorApiCallException(error: NetworkResponse.Error)`, preserving the full error detail.
 
 ---
 
@@ -97,7 +115,7 @@ RateLimit → Resilience → Trace → ApiLogging → HttpLogging
 | `.resilience()` | Resilience4j circuit breaker + exponential-backoff retry. Config driven by `VendorApiResilienceConfig`. |
 | `.trace(requestIdProvider)` | Forwards the inbound request-id to each outbound attempt with a per-attempt suffix. |
 | `.apiLogging(sink)` | Persists a structured `VendorApiLog` per attempt via `VendorApiLogSink`. |
-| `.httpLogging(level, log)` | Raw HTTP traffic log. Defaults to `Level.BODY` via SLF4J. |
+| `.httpLogging(level, log)` | Raw HTTP traffic log. Defaults to `Level.BODY`, logged at SLF4J `INFO`. |
 | `.settings(settings)` | Override `VendorClientSettings` defaults (header names, timeouts, sensitive headers). |
 | `.customizeOkHttp(block)` | Escape hatch for custom OkHttp config (SSL, interceptors). Runs after all library interceptors. |
 
@@ -248,7 +266,9 @@ Modules are independently consumable — include only what you need.
 
 ## NetworkResponse
 
-All Retrofit calls return `Call<NetworkResponse<T>>`. The sealed type carries either the typed
+Retrofit interface methods declare `NetworkResponse<T>` directly — no `Call<...>` wrapper.
+The custom `CallAdapter` runs the call synchronously (`Call.execute()`) inside `adapt()` and
+always returns a `NetworkResponse`; it never throws. The sealed type carries either the typed
 body (`Success`) or a typed error reason (`Error`).
 
 ```kotlin
@@ -268,4 +288,7 @@ sealed class NetworkResponse<out T> {
 | `CIRCUIT_OPEN` | Circuit breaker OPEN |
 | `UNEXPECTED` | Any other throwable |
 
-Convenience operators: `map`, `fold`, `getOrElse`, `onSuccess`, `onError`.
+Convenience operators: `map`, `fold`, `getOrElse`, `onSuccess`, `onError`, and `orThrow()` —
+returns `Success.data` or throws `VendorApiCallException(error: NetworkResponse.Error)`, which
+carries the full error (message, `exceptionType`, response code, request, raw response) rather
+than just a message string.
