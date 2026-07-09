@@ -3,8 +3,10 @@ package vendorClient.response
 import io.mockk.mockk
 import okhttp3.Request
 import retrofit2.Response
+import vendorClient.exception.VendorApiCallException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -53,4 +55,13 @@ class NetworkResponseTest {
 
     @Test fun `getOrElse returns data on Success`() = assertEquals("ok", success().getOrElse { "x" })
     @Test fun `getOrElse returns default on Error`() = assertEquals("fallback", error().getOrElse { "fallback" })
+
+    @Test fun `orThrow returns data on Success`() = assertEquals("ok", success().orThrow())
+
+    @Test fun `orThrow throws VendorApiCallException wrapping the Error on Error`() {
+        val e = error()
+        val ex = assertFailsWith<VendorApiCallException> { e.orThrow() }
+        assertEquals(e, ex.error)
+        assertEquals("failed", ex.message)
+    }
 }

@@ -2,6 +2,7 @@ package vendorClient.response
 
 import okhttp3.Request
 import retrofit2.Response
+import vendorClient.exception.VendorApiCallException
 
 sealed class NetworkResponse<out T>(
     open val responseCode: Int,
@@ -56,6 +57,9 @@ inline fun <T> NetworkResponse<T>.getOrElse(default: (NetworkResponse.Error) -> 
     is NetworkResponse.Success -> data
     is NetworkResponse.Error -> default(this)
 }
+
+/** Returns [NetworkResponse.Success.data], or throws [VendorApiCallException] wrapping the [NetworkResponse.Error]. */
+fun <T> NetworkResponse<T>.orThrow(): T = getOrElse { throw VendorApiCallException(it) }
 
 inline fun <T> NetworkResponse<T>.onSuccess(action: (T) -> Unit): NetworkResponse<T> {
     if (this is NetworkResponse.Success) action(data)
