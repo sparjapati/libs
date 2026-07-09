@@ -29,11 +29,11 @@ project(":vendorClient") {
     version = property("vendorClientVersion") as String
 }
 project(":vendorClient-apiconfig-jpa") {
-    version = property("vendorClientVersion") as String
+    version = property("vendorClientApiConfigJpaVersion") as String
 }
 project(":vendorClient-apilog-jpa") {
-    version = property("vendorClientVersion") as String
+    version = property("vendorClientApiLogJpaVersion") as String
 }
 project(":vendorClient-ratelimiter-redis") {
-    version = property("vendorClientVersion") as String
+    version = property("vendorClientRateLimiterRedisVersion") as String
 }
