@@ -16,6 +16,7 @@ class VendorApiResilienceInterceptorTest {
     enum class TestApi : VendorApiKey { MY_API }
 
     private fun config(resilience: VendorApiResilienceConfig) = VendorApiConfig(
+        apiName = "MY_API",
         maxRequests = 10, windowSeconds = 60, enabled = true,
         tempDisabledUntil = null, resilience = resilience,
     )

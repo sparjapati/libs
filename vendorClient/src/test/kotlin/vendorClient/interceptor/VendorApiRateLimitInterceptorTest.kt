@@ -43,6 +43,7 @@ class VendorApiRateLimitInterceptorTest {
         tempDisabledUntil: Instant? = null,
         enabled: Boolean = true,
     ) = VendorApiConfig(
+        apiName = "MY_API",
         maxRequests = 10, windowSeconds = 60,
         enabled = enabled, tempDisabledUntil = tempDisabledUntil,
     )

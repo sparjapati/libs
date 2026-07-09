@@ -15,6 +15,7 @@ class VendorApiConfigMappingTest {
             cbEnabled = true, cbFailureRateThreshold = 40,
         )
         val dto = entity.toDto()
+        assertEquals("STRIPE", dto.apiName)
         assertEquals(10, dto.maxRequests)
         assertEquals(60, dto.windowSeconds)
         assertEquals(true, dto.enabled)
@@ -24,11 +25,12 @@ class VendorApiConfigMappingTest {
 
     @Test fun `config toEntity maps all fields`() {
         val config = VendorApiConfig(
+            apiName = "MY_API",
             maxRequests = 5, windowSeconds = 30, enabled = false,
             tempDisabledUntil = null,
             resilience = VendorApiResilienceConfig(retryEnabled = true, retryMaxAttempts = 2),
         )
-        val entity = config.toEntity("MY_API")
+        val entity = config.toEntity()
         assertEquals("MY_API", entity.apiName)
         assertEquals(5, entity.maxRequests)
         assertEquals(true, entity.retryEnabled)

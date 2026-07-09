@@ -8,6 +8,7 @@ import kotlin.test.assertTrue
 class VendorApiConfigTest {
 
     private fun config(tempDisabledUntil: Instant?) = VendorApiConfig(
+        apiName = "STRIPE",
         maxRequests = 10,
         windowSeconds = 60,
         enabled = true,

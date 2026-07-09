@@ -6,7 +6,6 @@ import vendorClient.apiconfig.jpa.mapping.toDto
 import vendorClient.apiconfig.jpa.mapping.toEntity
 import vendorClient.apiconfig.jpa.repository.VendorApiConfigRepository
 import vendorClient.config.VendorApiConfig
-import vendorClient.config.VendorApiConfigEntry
 import vendorClient.config.VendorApiConfigManager
 import java.time.Instant
 
@@ -22,17 +21,17 @@ open class JpaVendorApiConfigManager(
 ) : VendorApiConfigManager {
 
     @Transactional
-    override fun createConfig(api: VendorApiKey, config: VendorApiConfig) {
-        require(!repository.existsByApiName(api.name)) {
-            "JpaVendorApiConfigManager.createConfig: config already exists for API '${api.name}'"
+    override fun createConfig(config: VendorApiConfig) {
+        require(!repository.existsByApiName(config.apiName)) {
+            "JpaVendorApiConfigManager.createConfig: config already exists for API '${config.apiName}'"
         }
-        repository.save(config.toEntity(api.name))
+        repository.save(config.toEntity())
     }
 
     @Transactional
-    override fun updateConfig(api: VendorApiKey, config: VendorApiConfig) {
-        val existing = requireNotNull(repository.findByApiName(api.name)) {
-            "JpaVendorApiConfigManager.updateConfig: no config found for API '${api.name}'"
+    override fun updateConfig(config: VendorApiConfig) {
+        val existing = requireNotNull(repository.findByApiName(config.apiName)) {
+            "JpaVendorApiConfigManager.updateConfig: no config found for API '${config.apiName}'"
         }
         existing.apply {
             maxRequests = config.maxRequests
@@ -62,6 +61,6 @@ open class JpaVendorApiConfigManager(
     }
 
     @Transactional(readOnly = true)
-    override fun listConfigs(): List<VendorApiConfigEntry> =
-        repository.findAll().map { VendorApiConfigEntry(apiName = it.apiName, config = it.toDto()) }
+    override fun listConfigs(): List<VendorApiConfig> =
+        repository.findAll().map { it.toDto() }
 }

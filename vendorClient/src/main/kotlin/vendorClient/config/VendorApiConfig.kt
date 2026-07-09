@@ -7,6 +7,7 @@ import java.time.Instant
  * enabled state, optional temporary disable window, and resilience settings.
  */
 data class VendorApiConfig(
+    val apiName: String,
     val maxRequests: Int,
     val windowSeconds: Int,
     val enabled: Boolean,

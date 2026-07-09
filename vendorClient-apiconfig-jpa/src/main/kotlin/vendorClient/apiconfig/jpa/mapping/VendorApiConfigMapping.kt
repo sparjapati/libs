@@ -5,6 +5,7 @@ import vendorClient.config.VendorApiResilienceConfig
 import vendorClient.apiconfig.jpa.entity.VendorApiConfigEntity
 
 fun VendorApiConfigEntity.toDto(): VendorApiConfig = VendorApiConfig(
+    apiName = apiName,
     maxRequests = maxRequests,
     windowSeconds = windowSeconds,
     enabled = enabled,
@@ -22,7 +23,7 @@ fun VendorApiConfigEntity.toDto(): VendorApiConfig = VendorApiConfig(
     ),
 )
 
-fun VendorApiConfig.toEntity(apiName: String): VendorApiConfigEntity = VendorApiConfigEntity(
+fun VendorApiConfig.toEntity(): VendorApiConfigEntity = VendorApiConfigEntity(
     apiName = apiName,
     maxRequests = maxRequests,
     windowSeconds = windowSeconds,

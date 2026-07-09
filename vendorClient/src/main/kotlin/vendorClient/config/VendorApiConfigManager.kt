@@ -11,10 +11,10 @@ import java.time.Instant
  */
 interface VendorApiConfigManager {
     /** Creates a new config entry. Throws [IllegalArgumentException] if one already exists. */
-    fun createConfig(api: VendorApiKey, config: VendorApiConfig)
+    fun createConfig(config: VendorApiConfig)
 
     /** Updates an existing config entry. Throws [IllegalArgumentException] if none exists. */
-    fun updateConfig(api: VendorApiKey, config: VendorApiConfig)
+    fun updateConfig(config: VendorApiConfig)
 
     /**
      * Sets a temporary disable window ending at [until].
@@ -22,17 +22,6 @@ interface VendorApiConfigManager {
      */
     fun tempDisable(api: VendorApiKey, until: Instant)
 
-    /**
-     * Lists all stored config entries.
-     *
-     * Returns [VendorApiConfigEntry.apiName] rather than a [VendorApiKey] instance — implementations
-     * only persist the raw name, and have no way to resolve it back to a caller-defined enum constant.
-     */
-    fun listConfigs(): List<VendorApiConfigEntry>
+    /** Lists all stored config entries. */
+    fun listConfigs(): List<VendorApiConfig>
 }
-
-/** A stored config entry paired with the raw API name it was persisted under. */
-data class VendorApiConfigEntry(
-    val apiName: String,
-    val config: VendorApiConfig,
-)

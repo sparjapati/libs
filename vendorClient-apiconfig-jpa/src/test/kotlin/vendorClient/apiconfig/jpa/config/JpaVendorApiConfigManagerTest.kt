@@ -21,6 +21,7 @@ class JpaVendorApiConfigManagerTest {
     private val manager = JpaVendorApiConfigManager(repository)
 
     private fun config() = VendorApiConfig(
+        apiName = "STRIPE",
         maxRequests = 10,
         windowSeconds = 60,
         enabled = true,
@@ -39,21 +40,21 @@ class JpaVendorApiConfigManagerTest {
     @Test fun `createConfig saves new entity`() {
         every { repository.existsByApiName("STRIPE") } returns false
         every { repository.save(any()) } returnsArgument 0
-        manager.createConfig(api = Api.STRIPE, config = config())
+        manager.createConfig(config = config())
         verify { repository.save(any()) }
     }
 
     @Test fun `createConfig throws when config already exists`() {
         every { repository.existsByApiName("STRIPE") } returns true
         assertThrows<IllegalArgumentException> {
-            manager.createConfig(api = Api.STRIPE, config = config())
+            manager.createConfig(config = config())
         }
     }
 
     @Test fun `updateConfig throws when config not found`() {
         every { repository.findByApiName("STRIPE") } returns null
         assertThrows<IllegalArgumentException> {
-            manager.updateConfig(api = Api.STRIPE, config = config())
+            manager.updateConfig(config = config())
         }
     }
 

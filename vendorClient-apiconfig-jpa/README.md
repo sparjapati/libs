@@ -30,9 +30,9 @@ automatically — no `@Enable*` annotation or explicit bean declaration required
 
 Both beans are `@ConditionalOnMissingBean` — declare your own bean to override either.
 
-`VendorApiConfigManager.listConfigs()` returns entries keyed by the raw `apiName: String` rather
-than a `VendorApiKey` instance — the JPA layer only ever persists the name, and has no way to
-resolve it back to a caller-defined `VendorApiKey` enum constant.
+`VendorApiConfig` now carries its own `apiName: String`. `createConfig`/`updateConfig` derive the
+target row from `config.apiName`; `getConfig`/`tempDisable` still take a separate `api: VendorApiKey`
+since they have no config to derive a name from.
 
 The repository and entity are scanned automatically. No `@EntityScan` or `@EnableJpaRepositories`
 extension is needed in the host application for these classes.
