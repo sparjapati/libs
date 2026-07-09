@@ -7,7 +7,6 @@ import vendorClient.apiconfig.jpa.mapping.toEntity
 import vendorClient.apiconfig.jpa.repository.VendorApiConfigRepository
 import vendorClient.config.VendorApiConfig
 import vendorClient.config.VendorApiConfigManager
-import java.time.Instant
 
 /**
  * JPA-backed [VendorApiConfigManager] that persists vendor API configuration to the database.
@@ -52,7 +51,7 @@ open class JpaVendorApiConfigManager(
     }
 
     @Transactional
-    override fun tempDisable(api: VendorApiKey, until: Instant) {
+    override fun tempDisable(api: VendorApiKey, until: Long) {
         val existing = requireNotNull(repository.findByApiName(api.name)) {
             "JpaVendorApiConfigManager.tempDisable: no config found for API '${api.name}'"
         }

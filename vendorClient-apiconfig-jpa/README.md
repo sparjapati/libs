@@ -50,7 +50,7 @@ Table: **`vendorApiConfig`**
 | `maxRequests` | `INT` NOT NULL | Rate-limit window capacity |
 | `windowSeconds` | `INT` NOT NULL | Sliding-window duration |
 | `enabled` | `BOOLEAN` NOT NULL | Permanently enables/disables this API |
-| `tempDisabledUntil` | `TIMESTAMP` | Non-null while in cooldown |
+| `tempDisabledUntil` | `BIGINT` | Epoch millis; non-null while in cooldown |
 | `cbEnabled` | `BOOLEAN` NOT NULL | Opt-in circuit breaker |
 | `cbFailureRateThreshold` | `INT` | % failures to open the CB |
 | `cbWaitDurationSeconds` | `INT` | Seconds CB stays OPEN before half-open probe |

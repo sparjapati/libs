@@ -1,9 +1,7 @@
 package com.dbStore.modals
 
-import java.time.LocalDateTime
-
 data class DbStoreCache(
     val cacheKey: String,
     val value: String,
-    val expiresAt: LocalDateTime? = null
+    val expiresAt: Long? = null
 )

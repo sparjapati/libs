@@ -11,7 +11,6 @@ import vendorClient.apiconfig.jpa.entity.VendorApiConfigEntity
 import vendorClient.apiconfig.jpa.repository.VendorApiConfigRepository
 import vendorClient.config.VendorApiConfig
 import vendorClient.config.VendorApiResilienceConfig
-import java.time.Instant
 
 class JpaVendorApiConfigManagerTest {
 
@@ -62,7 +61,7 @@ class JpaVendorApiConfigManagerTest {
         val e = entity()
         every { repository.findByApiName("STRIPE") } returns e
         every { repository.save(any()) } returnsArgument 0
-        val until = Instant.now().plusSeconds(300)
+        val until = System.currentTimeMillis() + 300_000
         manager.tempDisable(api = Api.STRIPE, until = until)
         verify { repository.save(match { it.tempDisabledUntil == until }) }
     }

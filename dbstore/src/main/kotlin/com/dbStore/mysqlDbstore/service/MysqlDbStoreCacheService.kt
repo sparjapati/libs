@@ -8,7 +8,6 @@ import com.dbStore.mysqlDbstore.repository.MysqlDbStoreCacheRepository
 import com.dbStore.service.DbStoreService
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
-import java.time.LocalDateTime
 import kotlin.jvm.optionals.getOrNull
 
 class MysqlDbStoreCacheService(
@@ -27,7 +26,7 @@ class MysqlDbStoreCacheService(
     override fun save(
         cacheKey: String,
         value: Any,
-        expiresAt: LocalDateTime?
+        expiresAt: Long?
     ): DbStoreCache {
         return repository.save(
             DbStoreCacheEntryEntity(

@@ -5,7 +5,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.StandardEvaluationContext
 import java.lang.reflect.Method
-import java.time.LocalDateTime
 
 class DbStoreCacheSupport(
     private val dbStoreService: DbStoreService,
@@ -47,7 +46,7 @@ class DbStoreCacheSupport(
             return null
         }
 
-        if (entry.expiresAt?.isBefore(LocalDateTime.now()) == true) {
+        if (entry.expiresAt != null && entry.expiresAt < System.currentTimeMillis()) {
             log.debug("Cache entry expired, evicting key={}", key)
             dbStoreService.delete(key)
             return null
@@ -62,7 +61,7 @@ class DbStoreCacheSupport(
         ttlSeconds: Long,
     ) {
         val expiresAt = if (ttlSeconds > 0)
-            LocalDateTime.now().plusSeconds(ttlSeconds)
+            System.currentTimeMillis() + ttlSeconds * 1000
         else null
 
         log.debug("Saving to cache key={} ttlSeconds={}", key, ttlSeconds)

@@ -59,7 +59,7 @@ Create the table (or let Hibernate create it via `spring.jpa.hibernate.ddl-auto`
 CREATE TABLE dbStoreCache (
     cacheKey  VARCHAR(255) NOT NULL PRIMARY KEY,
     value     TEXT         NOT NULL,
-    expiresAt DATETIME
+    expiresAt BIGINT
 );
 ```
 
@@ -187,7 +187,7 @@ class MyService(private val dbStoreService: DbStoreService) {
         dbStoreService.save(
             cacheKey  = key,
             value     = value,
-            expiresAt = LocalDateTime.now().plusHours(1),
+            expiresAt = System.currentTimeMillis() + 3_600_000,
         )
     }
 
@@ -203,7 +203,7 @@ class MyService(private val dbStoreService: DbStoreService) {
 |---|---|---|
 | `cacheKey` | `String` | The full composite key |
 | `value` | `String` | JSON-serialized value |
-| `expiresAt` | `LocalDateTime?` | Expiry timestamp, or `null` for no expiry |
+| `expiresAt` | `Long?` | Expiry timestamp (epoch millis), or `null` for no expiry |
 
 ---
 

@@ -108,7 +108,7 @@ RateLimit → Resilience → Trace → ApiLogging → HttpLogging
 ### Rate Limiting
 
 Tokens consumed **once per logical request** (before retries). On breach the API enters a
-temporary cooldown and `onTempDisable` is called with the expiry instant.
+temporary cooldown and `onTempDisable` is called with the expiry (epoch millis).
 
 `InMemoryRateLimitStore` is included for development and single-node use. For multi-instance
 deployments, use `vendorClient-ratelimiter-redis` which provides `RedisRateLimitStore` backed by a Lua

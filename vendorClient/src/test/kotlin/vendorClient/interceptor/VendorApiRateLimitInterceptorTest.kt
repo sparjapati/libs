@@ -10,7 +10,6 @@ import vendorClient.ratelimit.RateLimitStore
 import io.mockk.*
 import okhttp3.*
 import retrofit2.Invocation
-import java.time.Instant
 import kotlin.test.*
 
 class VendorApiRateLimitInterceptorTest {
@@ -40,7 +39,7 @@ class VendorApiRateLimitInterceptorTest {
     }
 
     private fun enabledConfig(
-        tempDisabledUntil: Instant? = null,
+        tempDisabledUntil: Long? = null,
         enabled: Boolean = true,
     ) = VendorApiConfig(
         apiName = "MY_API",
@@ -48,7 +47,7 @@ class VendorApiRateLimitInterceptorTest {
         enabled = enabled, tempDisabledUntil = tempDisabledUntil,
     )
 
-    private val onTempDisable: (VendorApiKey, Instant) -> Unit = mockk(relaxed = true)
+    private val onTempDisable: (VendorApiKey, Long) -> Unit = mockk(relaxed = true)
 
     @Test fun `passes through when no annotation`() {
         val store: RateLimitStore = mockk()
@@ -72,7 +71,7 @@ class VendorApiRateLimitInterceptorTest {
 
     @Test fun `throws VendorApiTemporarilyDisabledException when API is in cooldown`() {
         val interceptor = VendorApiRateLimitInterceptor(
-            getConfig = { enabledConfig(tempDisabledUntil = Instant.now().plusSeconds(60)) },
+            getConfig = { enabledConfig(tempDisabledUntil = System.currentTimeMillis() + 60_000) },
             rateLimitStore = mockk(),
             onTempDisable = onTempDisable,
         )

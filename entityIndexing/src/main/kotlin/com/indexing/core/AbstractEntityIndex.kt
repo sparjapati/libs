@@ -1,10 +1,8 @@
 package com.indexing.core
 
-import java.time.Instant
-
 abstract class AbstractEntityIndex(
     val id: String,
-    var lastModified: Instant,
+    var lastModified: Long,
     var lastModifiedBy: String,
     var isDeleted: Boolean = false,
 )

@@ -9,7 +9,6 @@ import vendorClient.exception.VendorApiTemporarilyDisabledException
 import vendorClient.ratelimit.RateLimitStore
 import okhttp3.Interceptor
 import okhttp3.Response
-import java.time.Instant
 
 /**
  * OkHttp interceptor that enforces per-API rate limits and enabled/disabled state before
@@ -30,14 +29,14 @@ import java.time.Instant
  *
  * @param getConfig supplies the current [vendorClient.config.VendorApiConfig] for a given [VendorApiKey].
  * @param rateLimitStore sliding-window token store; must be safe to call from multiple threads.
- * @param onTempDisable callback invoked with the affected [VendorApiKey] and the computed disable-until [Instant]
- *   when the rate limit is exceeded. Matches the signature of
+ * @param onTempDisable callback invoked with the affected [VendorApiKey] and the computed disable-until
+ *   epoch millis when the rate limit is exceeded. Matches the signature of
  *   [vendorClient.config.VendorApiConfigManager.tempDisable] so callers can pass it as a method reference.
  */
 class VendorApiRateLimitInterceptor(
     private val getConfig: VendorApiConfigProvider,
     private val rateLimitStore: RateLimitStore,
-    private val onTempDisable: (VendorApiKey, Instant) -> Unit,
+    private val onTempDisable: (VendorApiKey, Long) -> Unit,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -51,11 +50,11 @@ class VendorApiRateLimitInterceptor(
 
         if (!config.enabled) throw VendorApiDisabledException(api)
 
-        val now = Instant.now()
+        val now = System.currentTimeMillis()
         if (config.isTemporarilyDisabled(now)) throw VendorApiTemporarilyDisabledException(api)
 
         if (!rateLimitStore.tryAcquire(api, config.maxRequests, config.windowSeconds)) {
-            val until = now.plusSeconds(config.windowSeconds.toLong())
+            val until = now + config.windowSeconds * 1000L
             onTempDisable(api, until)
             throw VendorApiRateLimitExceededException("Rate limit exceeded for ${api.name}")
         }

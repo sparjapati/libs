@@ -1,7 +1,6 @@
 package vendorClient.apilog.jpa.entity
 
 import jakarta.persistence.*
-import java.time.Instant
 
 @Entity
 @Table(
@@ -55,5 +54,5 @@ class VendorApiLogEntity(
     val durationMs: Long = 0L,
 
     @Column(nullable = false)
-    val createdAt: Instant = Instant.now(),
+    val createdAt: Long = System.currentTimeMillis(),
 )

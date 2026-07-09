@@ -1,7 +1,6 @@
 package vendorClient.config
 
 import vendorClient.VendorApiKey
-import java.time.Instant
 
 /**
  * Write interface for managing per-API configuration entries.
@@ -17,10 +16,10 @@ interface VendorApiConfigManager {
     fun updateConfig(config: VendorApiConfig)
 
     /**
-     * Sets a temporary disable window ending at [until].
+     * Sets a temporary disable window ending at [until] (epoch millis).
      * Passed as `configManager::tempDisable` to the builder's rate-limiter `onTempDisable` callback.
      */
-    fun tempDisable(api: VendorApiKey, until: Instant)
+    fun tempDisable(api: VendorApiKey, until: Long)
 
     /** Lists all stored config entries. */
     fun listConfigs(): List<VendorApiConfig>

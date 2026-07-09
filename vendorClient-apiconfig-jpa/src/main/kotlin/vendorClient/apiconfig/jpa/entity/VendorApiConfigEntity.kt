@@ -1,7 +1,6 @@
 package vendorClient.apiconfig.jpa.entity
 
 import jakarta.persistence.*
-import java.time.Instant
 
 @Entity
 @Table(
@@ -18,7 +17,7 @@ class VendorApiConfigEntity(
     @Column(nullable = false) var maxRequests: Int = 0,
     @Column(nullable = false) var windowSeconds: Int = 0,
     @Column(nullable = false) var enabled: Boolean = false,
-    @Column var tempDisabledUntil: Instant? = null,
+    @Column var tempDisabledUntil: Long? = null,
 
     @Column(nullable = false) var cbEnabled: Boolean = false,
     @Column var cbFailureRateThreshold: Int? = null,

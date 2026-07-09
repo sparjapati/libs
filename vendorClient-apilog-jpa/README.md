@@ -55,7 +55,7 @@ Table: **`vendorApiLogs`**
 | `success` | `BOOLEAN` NOT NULL | `true` for 2xx responses |
 | `errorMessage` | `VARCHAR(1000)` | Nullable — populated on non-2xx or exception |
 | `durationMs` | `BIGINT` NOT NULL | Round-trip time for this attempt in milliseconds |
-| `createdAt` | `TIMESTAMP` NOT NULL | Set at log write time |
+| `createdAt` | `BIGINT` NOT NULL | Epoch millis; set at log write time |
 
 Indexes:
 - `idx_vendor_api_logs_api_name_created_at` on `(apiName, createdAt)` — supports paginated queries by API

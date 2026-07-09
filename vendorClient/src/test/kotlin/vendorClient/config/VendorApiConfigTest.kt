@@ -1,13 +1,12 @@
 package vendorClient.config
 
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VendorApiConfigTest {
 
-    private fun config(tempDisabledUntil: Instant?) = VendorApiConfig(
+    private fun config(tempDisabledUntil: Long?) = VendorApiConfig(
         apiName = "STRIPE",
         maxRequests = 10,
         windowSeconds = 60,
@@ -16,16 +15,18 @@ class VendorApiConfigTest {
     )
 
     @Test fun `isTemporarilyDisabled returns false when tempDisabledUntil is null`() {
-        assertFalse(config(null).isTemporarilyDisabled(Instant.now()))
+        assertFalse(config(null).isTemporarilyDisabled(System.currentTimeMillis()))
     }
 
     @Test fun `isTemporarilyDisabled returns true when now is before tempDisabledUntil`() {
-        val future = Instant.now().plusSeconds(60)
-        assertTrue(config(future).isTemporarilyDisabled(Instant.now()))
+        val now = System.currentTimeMillis()
+        val future = now + 60_000
+        assertTrue(config(future).isTemporarilyDisabled(now))
     }
 
     @Test fun `isTemporarilyDisabled returns false when tempDisabledUntil is in the past`() {
-        val past = Instant.now().minusSeconds(1)
-        assertFalse(config(past).isTemporarilyDisabled(Instant.now()))
+        val now = System.currentTimeMillis()
+        val past = now - 1_000
+        assertFalse(config(past).isTemporarilyDisabled(now))
     }
 }

@@ -7,7 +7,6 @@ import jakarta.persistence.Id
 import jakarta.persistence.PrePersist
 import jakarta.persistence.PreUpdate
 import jakarta.persistence.Table
-import java.time.LocalDateTime
 
 @Entity(name = "dbStoreCache")
 @Table(name = "dbStoreCache")
@@ -22,10 +21,10 @@ class DbStoreCacheEntryEntity {
         private set
 
     @Column
-    var expiresAt: LocalDateTime? = null
+    var expiresAt: Long? = null
         private set
 
-    constructor(cacheKey: String, value: String, expiresAt: LocalDateTime?) {
+    constructor(cacheKey: String, value: String, expiresAt: Long?) {
         this.cacheKey = cacheKey
         this.value = value
         this.expiresAt = expiresAt
@@ -34,7 +33,8 @@ class DbStoreCacheEntryEntity {
     @PrePersist
     @PreUpdate
     fun validate() {
-        if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
+        val expiry = expiresAt
+        if (expiry != null && System.currentTimeMillis() > expiry) {
             throw IllegalStateException("Invalid cache expiry date")
         }
     }

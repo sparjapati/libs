@@ -79,7 +79,7 @@ class UserIndex(
     id: String,
     var name: String,
     var email: String,
-    lastModified: Instant,
+    lastModified: Long,
     lastModifiedBy: String,
     isDeleted: Boolean = false,
 ) : AbstractEntityIndex(id, lastModified, lastModifiedBy, isDeleted)

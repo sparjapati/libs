@@ -14,7 +14,6 @@ import vendorClient.retrofit.RetrofitNetworkCallAdapterFactory
 import okhttp3.OkHttpClient
 import org.slf4j.LoggerFactory
 import retrofit2.Retrofit
-import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 object VendorClient {
@@ -25,7 +24,7 @@ object VendorClient {
         private var settings: VendorClientSettings = VendorClientSettings()
         private var configProvider: VendorApiConfigProvider? = null
         private var rateLimitStore: RateLimitStore? = null
-        private var onTempDisable: ((VendorApiKey, Instant) -> Unit)? = null
+        private var onTempDisable: ((VendorApiKey, Long) -> Unit)? = null
         private var resilienceEnabled: Boolean = false
         private var logSink: VendorApiLogSink? = null
         private var httpLogLevel: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.NONE
@@ -45,7 +44,7 @@ object VendorClient {
          */
         fun rateLimiter(
             store: RateLimitStore,
-            onTempDisable: (VendorApiKey, Instant) -> Unit,
+            onTempDisable: (VendorApiKey, Long) -> Unit,
         ) = apply {
             this.rateLimitStore = store
             this.onTempDisable = onTempDisable
