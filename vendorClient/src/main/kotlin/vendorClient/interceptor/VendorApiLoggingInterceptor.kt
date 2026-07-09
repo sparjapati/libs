@@ -62,7 +62,7 @@ class VendorApiLoggingInterceptor(
             val responseBody = if (isBinary(response.body?.contentType()?.toString())) {
                 BINARY_BODY_PLACEHOLDER
             } else {
-                response.peekBody(Long.MAX_VALUE)?.string()
+                response.peekBody(Long.MAX_VALUE).string()
             }
 
             logSink.save(
