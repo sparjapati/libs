@@ -75,6 +75,14 @@ Wrap it with a caching decorator (e.g. Spring Cache, `dbstore`) if you need in-p
 
 ---
 
+## Logging
+
+`JpaVendorApiConfigManager` logs at SLF4J `INFO` on every `createConfig`/`updateConfig`/`tempDisable`
+write, and at `DEBUG` on `listConfigs`. `JpaVendorApiConfigProvider` logs at `DEBUG` when no config
+is found for an API.
+
+---
+
 ## Temp-disable cleanup
 
 `VendorApiConfigTempDisableCleanupScheduler` runs on a fixed rate and clears `tempDisabledUntil`

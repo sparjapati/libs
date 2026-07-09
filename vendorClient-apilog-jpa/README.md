@@ -89,6 +89,14 @@ Results are ordered by `createdAt DESC`.
 
 ---
 
+## Logging
+
+`JpaVendorApiLogSink` logs at SLF4J `INFO` on every save (`api`, `requestId`, `attemptId`,
+`success`, `durationMs`). `JpaVendorApiLogQuery` logs result counts at `DEBUG` for both query
+methods.
+
+---
+
 ## Manual bean setup
 
 If you prefer explicit configuration over autoconfiguration:

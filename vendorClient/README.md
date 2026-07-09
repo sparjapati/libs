@@ -135,6 +135,10 @@ atomic sliding window.
 > **Multi-instance note:** Each JVM maintains an independent window. With _N_ instances the
 > effective limit is _N × maxRequests_. Use `RedisRateLimitStore` for shared enforcement.
 
+`VendorApiRateLimitInterceptor` logs at SLF4J `WARN` whenever it rejects a request: API disabled,
+API temporarily disabled (with the cooldown expiry), or rate limit exceeded (with the new
+disable-until expiry).
+
 ### Resilience (Circuit Breaker + Retry)
 
 Configure per API via `VendorApiResilienceConfig` inside `VendorApiConfig`:
@@ -156,6 +160,9 @@ Configure per API via `VendorApiResilienceConfig` inside `VendorApiConfig`:
 > request and are hot-reloadable.
 
 5xx responses are treated as failures for both retry and circuit breaker. 4xx pass through unchanged.
+
+`VendorApiResilienceInterceptor` logs at SLF4J `WARN` on every 5xx-triggered failure (before
+retry/CB evaluate it) and whenever the circuit breaker rejects a call outright.
 
 ### Trace Forwarding
 
