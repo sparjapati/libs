@@ -8,7 +8,7 @@ import vendorClient.logging.VendorApiLog
 import vendorClient.logging.VendorApiLogPage
 import vendorClient.logging.VendorApiLogQuery
 
-class JpaVendorApiLogQuery(
+open class JpaVendorApiLogQuery(
     private val repository: VendorApiLogRepository,
 ) : VendorApiLogQuery {
 

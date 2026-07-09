@@ -6,7 +6,7 @@ import vendorClient.apilog.jpa.repository.VendorApiLogRepository
 import vendorClient.logging.VendorApiLog
 import vendorClient.logging.VendorApiLogSink
 
-class JpaVendorApiLogSink(
+open class JpaVendorApiLogSink(
     private val repository: VendorApiLogRepository,
 ) : VendorApiLogSink {
 

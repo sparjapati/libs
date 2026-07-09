@@ -4,13 +4,11 @@ import com.indexing.core.AbstractEntityIndex
 import com.indexing.core.IndexConverter
 import com.indexing.core.IndexConverterRegistry
 import jakarta.persistence.EntityManager
-import jakarta.persistence.PersistenceContext
 import org.slf4j.LoggerFactory
 import org.springframework.transaction.annotation.Transactional
 import kotlin.reflect.KClass
 
-class ReindexService(
-    @PersistenceContext
+open class ReindexService(
     private val entityManager: EntityManager,
     private val converterRegistry: IndexConverterRegistry,
     private val chunkSize: Int = 50,

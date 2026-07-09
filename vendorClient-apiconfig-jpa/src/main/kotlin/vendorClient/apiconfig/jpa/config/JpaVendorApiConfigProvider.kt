@@ -13,7 +13,7 @@ import vendorClient.config.VendorApiConfigProvider
  * Intentionally has no in-process cache — callers that need caching should wrap this
  * with a caching decorator rather than having caching baked in here.
  */
-class JpaVendorApiConfigProvider(
+open class JpaVendorApiConfigProvider(
     private val repository: VendorApiConfigRepository,
 ) : VendorApiConfigProvider {
 

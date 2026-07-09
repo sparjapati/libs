@@ -15,7 +15,7 @@ import java.time.Instant
  * callers receive a clear [IllegalArgumentException] with diagnostic context on misuse,
  * rather than a cryptic constraint violation from the database layer.
  */
-class JpaVendorApiConfigManager(
+open class JpaVendorApiConfigManager(
     private val repository: VendorApiConfigRepository,
 ) : VendorApiConfigManager {
 
