@@ -5,10 +5,14 @@ package vendorClient.logging
  *
  * [requestHeaders] and [responseHeaders] map header names to their list of values,
  * matching OkHttp's multi-value header model.
+ *
+ * [requestId] is shared by every retry attempt of one logical call; [attemptId] is unique per
+ * attempt, so rows for the same [requestId] can be told apart.
  */
 data class VendorApiLog(
     val apiName: String,
     val requestId: String,
+    val attemptId: String,
     val httpMethod: String,
     val url: String,
     val requestHeaders: Map<String, List<String>> = emptyMap(),

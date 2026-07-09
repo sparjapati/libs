@@ -61,8 +61,22 @@ class VendorApiLoggingInterceptorTest {
             .intercept(chain(200))
         assertEquals("MY_API", capturedLog.captured.apiName)
         assertEquals("req-abc", capturedLog.captured.requestId)
+        assertTrue(capturedLog.captured.attemptId.isNotBlank())
         assertTrue(capturedLog.captured.success)
         assertEquals(200, capturedLog.captured.responseCode)
+    }
+
+    @Test fun `each retry attempt gets a distinct attemptId sharing the same requestId`() {
+        val interceptor = VendorApiLoggingInterceptor(logSink = sink, requestIdProvider = { "req-abc" })
+
+        interceptor.intercept(chain(500))
+        val firstAttemptId = capturedLog.captured.attemptId
+
+        interceptor.intercept(chain(200))
+        val secondAttemptId = capturedLog.captured.attemptId
+
+        assertEquals("req-abc", capturedLog.captured.requestId)
+        assertNotEquals(firstAttemptId, secondAttemptId)
     }
 
     @Test fun `logs failed response (4xx) as not success`() {

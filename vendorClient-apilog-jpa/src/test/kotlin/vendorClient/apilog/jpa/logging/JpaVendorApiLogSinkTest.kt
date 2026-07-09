@@ -13,7 +13,7 @@ class JpaVendorApiLogSinkTest {
     private val sink = JpaVendorApiLogSink(repository)
 
     private fun log() = VendorApiLog(
-        apiName = "STRIPE", requestId = "req-1", httpMethod = "GET",
+        apiName = "STRIPE", requestId = "req-1", attemptId = "attempt-1", httpMethod = "GET",
         url = "https://api.stripe.com", success = true, durationMs = 42L,
     )
 

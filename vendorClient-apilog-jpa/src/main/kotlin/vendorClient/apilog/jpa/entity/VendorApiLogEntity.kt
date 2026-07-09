@@ -21,6 +21,9 @@ class VendorApiLogEntity(
     @Column(name = "requestId", nullable = false, length = 200)
     val requestId: String = "",
 
+    @Column(name = "attemptId", nullable = false, length = 36)
+    val attemptId: String = "",
+
     @Column(nullable = false, length = 10)
     val httpMethod: String = "",
 

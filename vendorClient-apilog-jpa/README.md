@@ -44,6 +44,7 @@ Table: **`vendorApiLogs`**
 | `id` | `BIGINT` AUTO_INCREMENT | Primary key |
 | `apiName` | `VARCHAR(100)` NOT NULL | Matches `VendorApiKey.name` |
 | `requestId` | `VARCHAR(200)` NOT NULL | Inbound request-id (not the per-attempt trace-id) |
+| `attemptId` | `VARCHAR(36)` NOT NULL | Fresh UUID per retry attempt — distinguishes rows sharing one `requestId` |
 | `httpMethod` | `VARCHAR(10)` NOT NULL | `GET`, `POST`, etc. |
 | `url` | `VARCHAR(2048)` NOT NULL | Full outbound URL |
 | `requestHeaders` | `TEXT` | JSON object — full fidelity, no masking |
@@ -73,7 +74,7 @@ Schema is managed by your application's DDL strategy (`spring.jpa.hibernate.ddl-
 logQuery.findByRequestIdPrefix("req-abc123")
 ```
 
-Retry attempts share the same base `requestId` but have distinct per-attempt trace-ids.
+Retry attempts share the same base `requestId` but have distinct `attemptId` values.
 Querying by prefix returns all attempts for a given inbound request in descending `createdAt` order.
 
 ### By API name (paginated)

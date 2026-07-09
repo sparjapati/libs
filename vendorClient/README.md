@@ -156,6 +156,7 @@ name for that specific API (e.g. `X-Stripe-Idempotency-Key` instead of the globa
 - Raw, unmasked headers (the sink receives full fidelity for storage)
 - Binary content-types → saved as `BINARY_BODY_PLACEHOLDER` instead of garbled bytes
 - `requestId` is the original inbound request ID (not the per-attempt trace ID)
+- `attemptId` is a fresh UUID per retry attempt, so rows sharing one `requestId` can be told apart
 - Duration measured via `kotlin.time.TimeSource`
 
 ### HTTP Debug Logging

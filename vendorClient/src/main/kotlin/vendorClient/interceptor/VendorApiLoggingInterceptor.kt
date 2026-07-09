@@ -7,6 +7,7 @@ import vendorClient.logging.VendorApiLogSink
 import okhttp3.Interceptor
 import okhttp3.Response
 import okio.Buffer
+import java.util.UUID
 import kotlin.time.TimeSource
 
 /**
@@ -30,6 +31,10 @@ import kotlin.time.TimeSource
  * reflects the original inbound Spring request ID rather than the per-attempt trace ID that
  * [TraceForwardingInterceptor] appends.
  *
+ * **Attempt ID**: since [intercept] runs once per retry attempt (this interceptor sits downstream
+ * of [VendorApiResilienceInterceptor] in the chain), a fresh [VendorApiLog.attemptId] is minted per
+ * invocation so rows sharing the same [requestIdProvider]-derived request ID can be told apart.
+ *
  * @param logSink persistence port; called once per request (even on exception)
  * @param requestIdProvider returns the current inbound request ID; defaults to `{ null }` (empty string stored)
  */
@@ -44,6 +49,7 @@ class VendorApiLoggingInterceptor(
             ?: return chain.proceed(request)
         val apiName = api.name
         val requestId = requestIdProvider() ?: ""
+        val attemptId = UUID.randomUUID().toString()
 
         val requestBody = request.body?.let { body ->
             if (isBinary(body.contentType()?.toString())) {
@@ -69,6 +75,7 @@ class VendorApiLoggingInterceptor(
                 VendorApiLog(
                     apiName = apiName,
                     requestId = requestId,
+                    attemptId = attemptId,
                     httpMethod = request.method,
                     url = request.url.toString(),
                     requestHeaders = request.headers.toMultimap(),
@@ -88,6 +95,7 @@ class VendorApiLoggingInterceptor(
                 VendorApiLog(
                     apiName = apiName,
                     requestId = requestId,
+                    attemptId = attemptId,
                     httpMethod = request.method,
                     url = request.url.toString(),
                     requestHeaders = request.headers.toMultimap(),
