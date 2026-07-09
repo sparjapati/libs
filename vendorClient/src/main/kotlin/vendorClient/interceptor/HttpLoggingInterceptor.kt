@@ -25,7 +25,9 @@ import kotlin.time.TimeSource
  *
  * **Timing**: elapsed time is measured using [TimeSource.Monotonic] for monotonic accuracy.
  *
- * @param log sink function; each intercepted request writes one multi-line string per HTTP exchange
+ * @param log sink function; called twice per HTTP exchange — once with the request immediately
+ *   before it's sent, once with the response after it's received — so a request is visible in the
+ *   log even if the response never arrives
  * @param level controls verbosity — [Level.NONE] disables all output, [Level.HEADERS] logs
  *   request/response line and headers only, [Level.BODY] also logs the full body
  * @param sensitiveHeaders header names (case-insensitive) whose values are replaced with `***` in output
@@ -61,6 +63,7 @@ class HttpLoggingInterceptor(
                 }
             }
         }
+        log(sb.toString())
 
         val mark = TimeSource.Monotonic.markNow()
         val response = chain.proceed(request)
@@ -91,7 +94,7 @@ class HttpLoggingInterceptor(
             sb2.append("\n$text\n")
         }
 
-        log(sb.toString() + "\n" + sb2.toString())
+        log(sb2.toString())
         return response
     }
 
