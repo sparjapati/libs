@@ -8,9 +8,10 @@ import com.dbStore.mysqlDbstore.repository.MysqlDbStoreCacheRepository
 import com.dbStore.service.DbStoreService
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
+import org.springframework.transaction.annotation.Transactional
 import kotlin.jvm.optionals.getOrNull
 
-class MysqlDbStoreCacheService(
+open class MysqlDbStoreCacheService(
     private val repository: MysqlDbStoreCacheRepository,
     private val objectMapper: ObjectMapper,
 ) : DbStoreService {
@@ -23,6 +24,7 @@ class MysqlDbStoreCacheService(
         LOGGER.info("MysqlDbStoreCacheService initialized!")
     }
 
+    @Transactional
     override fun save(
         cacheKey: String,
         value: Any,
@@ -37,16 +39,19 @@ class MysqlDbStoreCacheService(
         ).toDto()
     }
 
+    @Transactional(readOnly = true)
     override fun get(cacheKey: String): DbStoreCache? {
         return repository.findById(cacheKey)
             .map { it.toDto() }
             .getOrNull()
     }
 
+    @Transactional
     override fun delete(key: String) {
         repository.deleteById(key)
     }
 
+    @Transactional
     override fun deleteAllByPrefix(prefix: String) {
         repository.deleteAllByCacheKeyStartingWith(prefix)
     }
