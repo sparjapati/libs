@@ -1,5 +1,6 @@
 package vendorClient.apiconfig.jpa.config
 
+import org.slf4j.LoggerFactory
 import org.springframework.transaction.annotation.Transactional
 import vendorClient.VendorApiKey
 import vendorClient.apiconfig.jpa.mapping.toDto
@@ -17,7 +18,15 @@ open class JpaVendorApiConfigProvider(
     private val repository: VendorApiConfigRepository,
 ) : VendorApiConfigProvider {
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(JpaVendorApiConfigProvider::class.java)
+    }
+
     @Transactional(readOnly = true)
     override fun getConfig(api: VendorApiKey): VendorApiConfig? =
         repository.findByApiName(api.name)?.toDto()
+            ?: run {
+                LOGGER.debug("No VendorApiConfig found for API '{}'", api.name)
+                null
+            }
 }

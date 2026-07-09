@@ -14,6 +14,7 @@ import io.github.resilience4j.retry.RetryConfig
 import io.github.resilience4j.retry.RetryRegistry
 import okhttp3.Interceptor
 import okhttp3.Response
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.time.Duration
 
@@ -35,6 +36,10 @@ class VendorApiResilienceInterceptor(
     private val getConfig: VendorApiConfigProvider,
 ) : Interceptor {
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(VendorApiResilienceInterceptor::class.java)
+    }
+
     private val cbRegistry = CircuitBreakerRegistry.ofDefaults()
     private val retryRegistry = RetryRegistry.ofDefaults()
 
@@ -52,6 +57,7 @@ class VendorApiResilienceInterceptor(
             val response = chain.proceed(request)
             if (response.code >= 500) {
                 response.close()
+                LOGGER.warn("Vendor API '{}' returned {} — treating as failure for retry/circuit-breaker", api.name, response.code)
                 throw VendorApiServerErrorException(api, response.code)
             }
             response
@@ -74,6 +80,7 @@ class VendorApiResilienceInterceptor(
         return try {
             supplier.get()
         } catch (_: CallNotPermittedException) {
+            LOGGER.warn("Circuit breaker OPEN for API '{}' — rejecting call", api.name)
             throw VendorApiCircuitOpenException(api)
         } catch (e: IOException) {
             throw e

@@ -9,6 +9,7 @@ import vendorClient.exception.VendorApiTemporarilyDisabledException
 import vendorClient.ratelimit.RateLimitStore
 import okhttp3.Interceptor
 import okhttp3.Response
+import org.slf4j.LoggerFactory
 
 /**
  * OkHttp interceptor that enforces per-API rate limits and enabled/disabled state before
@@ -39,6 +40,10 @@ class VendorApiRateLimitInterceptor(
     private val onTempDisable: (VendorApiKey, Long) -> Unit,
 ) : Interceptor {
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(VendorApiRateLimitInterceptor::class.java)
+    }
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
 
@@ -48,13 +53,20 @@ class VendorApiRateLimitInterceptor(
         val config = getConfig.getConfig(api)
             ?: return chain.proceed(request)
 
-        if (!config.enabled) throw VendorApiDisabledException(api)
+        if (!config.enabled) {
+            LOGGER.warn("API '{}' is disabled — rejecting request", api.name)
+            throw VendorApiDisabledException(api)
+        }
 
         val now = System.currentTimeMillis()
-        if (config.isTemporarilyDisabled(now)) throw VendorApiTemporarilyDisabledException(api)
+        if (config.isTemporarilyDisabled(now)) {
+            LOGGER.warn("API '{}' is temporarily disabled until epoch millis {} — rejecting request", api.name, config.tempDisabledUntil)
+            throw VendorApiTemporarilyDisabledException(api)
+        }
 
         if (!rateLimitStore.tryAcquire(api, config.maxRequests, config.windowSeconds)) {
             val until = now + config.windowSeconds * 1000L
+            LOGGER.warn("Rate limit exceeded for API '{}' — disabling until epoch millis {}", api.name, until)
             onTempDisable(api, until)
             throw VendorApiRateLimitExceededException("Rate limit exceeded for ${api.name}")
         }

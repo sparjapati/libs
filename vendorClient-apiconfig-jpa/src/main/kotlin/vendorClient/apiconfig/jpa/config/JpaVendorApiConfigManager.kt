@@ -1,5 +1,6 @@
 package vendorClient.apiconfig.jpa.config
 
+import org.slf4j.LoggerFactory
 import org.springframework.transaction.annotation.Transactional
 import vendorClient.VendorApiKey
 import vendorClient.apiconfig.jpa.mapping.toDto
@@ -19,12 +20,17 @@ open class JpaVendorApiConfigManager(
     private val repository: VendorApiConfigRepository,
 ) : VendorApiConfigManager {
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(JpaVendorApiConfigManager::class.java)
+    }
+
     @Transactional
     override fun createConfig(config: VendorApiConfig) {
         require(!repository.existsByApiName(config.apiName)) {
             "JpaVendorApiConfigManager.createConfig: config already exists for API '${config.apiName}'"
         }
         repository.save(config.toEntity())
+        LOGGER.info("Created vendor API config for '{}'", config.apiName)
     }
 
     @Transactional
@@ -48,6 +54,7 @@ open class JpaVendorApiConfigManager(
             retryMaxIntervalMs = config.resilience.retryMaxIntervalMs
         }
         repository.save(existing)
+        LOGGER.info("Updated vendor API config for '{}'", config.apiName)
     }
 
     @Transactional
@@ -57,9 +64,11 @@ open class JpaVendorApiConfigManager(
         }
         existing.tempDisabledUntil = until
         repository.save(existing)
+        LOGGER.info("Temporarily disabled API '{}' until epoch millis {}", api.name, until)
     }
 
     @Transactional(readOnly = true)
     override fun listConfigs(): List<VendorApiConfig> =
         repository.findAll().map { it.toDto() }
+            .also { LOGGER.debug("Listed {} vendor API config(s)", it.size) }
 }
