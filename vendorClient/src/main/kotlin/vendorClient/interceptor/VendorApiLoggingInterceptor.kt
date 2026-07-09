@@ -1,7 +1,6 @@
 package vendorClient.interceptor
 
 import vendorClient.annotation.VendorApiAnnotationResolver
-import vendorClient.config.VendorClientSettings
 import vendorClient.logging.BINARY_BODY_PLACEHOLDER
 import vendorClient.logging.VendorApiLog
 import vendorClient.logging.VendorApiLogSink
@@ -31,12 +30,10 @@ import kotlin.time.TimeSource
  * reflects the original inbound Spring request ID rather than the per-attempt trace ID that
  * [TraceForwardingInterceptor] appends.
  *
- * @param settings global settings for header names and sensitive header set
  * @param logSink persistence port; called once per request (even on exception)
  * @param requestIdProvider returns the current inbound request ID; defaults to `{ null }` (empty string stored)
  */
 class VendorApiLoggingInterceptor(
-    private val settings: VendorClientSettings,
     private val logSink: VendorApiLogSink,
     private val requestIdProvider: () -> String? = { null },
 ) : Interceptor {

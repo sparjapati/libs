@@ -110,7 +110,6 @@ object VendorClient {
             logSink?.let {
                 okHttpBuilder.addInterceptor(
                     VendorApiLoggingInterceptor(
-                        settings = settings,
                         logSink = it,
                         requestIdProvider = requestIdProvider ?: { null },
                     )
