@@ -28,7 +28,7 @@ object VendorApiAnnotationResolver {
             .find { it.name == annotation.name }
             ?: throw IllegalArgumentException(
                 "VendorApiAnnotationResolver: '${annotation.name}' is not a constant of " +
-                    "${annotation.api.simpleName}. Valid values: ${constants.map { (it as VendorApiKey).name }}"
+                    "${annotation.api.simpleName}."
             )
     }
 }

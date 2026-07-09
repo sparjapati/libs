@@ -54,6 +54,5 @@ class VendorApiAnnotationResolverTest {
         }
         assert("MISSING" in ex.message!!)
         assert("TestApi" in ex.message!!)
-        assert("FOO" in ex.message!!)
     }
 }
