@@ -97,7 +97,7 @@ RateLimit → Resilience → Trace → ApiLogging → HttpLogging
 | `.resilience()` | Resilience4j circuit breaker + exponential-backoff retry. Config driven by `VendorApiResilienceConfig`. |
 | `.trace(requestIdProvider)` | Forwards the inbound request-id to each outbound attempt with a per-attempt suffix. |
 | `.apiLogging(sink)` | Persists a structured `VendorApiLog` per attempt via `VendorApiLogSink`. |
-| `.httpLogging(level, sink)` | Raw HTTP traffic log. Defaults to `Level.BODY` via SLF4J. |
+| `.httpLogging(level, log)` | Raw HTTP traffic log. Defaults to `Level.BODY` via SLF4J. |
 | `.settings(settings)` | Override `VendorClientSettings` defaults (header names, timeouts, sensitive headers). |
 | `.customizeOkHttp(block)` | Escape hatch for custom OkHttp config (SSL, interceptors). Runs after all library interceptors. |
 
@@ -216,7 +216,6 @@ Implement these interfaces to plug in persistence or custom stores:
 | `RateLimitStore` | Backend for the sliding-window token counter |
 | `VendorApiLogSink` | Persist `VendorApiLog` entries (DB, Elasticsearch, etc.) |
 | `VendorApiLogQuery` | Read log entries by requestId prefix or API name |
-| `LogSink` | Output sink for `HttpLoggingInterceptor` (defaults to SLF4J) |
 
 ---
 

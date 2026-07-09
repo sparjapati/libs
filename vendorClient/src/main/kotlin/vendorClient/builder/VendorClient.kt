@@ -8,8 +8,6 @@ import vendorClient.interceptor.TraceForwardingInterceptor
 import vendorClient.interceptor.VendorApiLoggingInterceptor
 import vendorClient.interceptor.VendorApiRateLimitInterceptor
 import vendorClient.interceptor.VendorApiResilienceInterceptor
-import vendorClient.logging.LogSink
-import vendorClient.logging.Slf4jLogSink
 import vendorClient.logging.VendorApiLogSink
 import vendorClient.ratelimit.RateLimitStore
 import vendorClient.retrofit.RetrofitNetworkCallAdapterFactory
@@ -31,7 +29,7 @@ object VendorClient {
         private var resilienceEnabled: Boolean = false
         private var logSink: VendorApiLogSink? = null
         private var httpLogLevel: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.NONE
-        private var httpLogSink: LogSink? = null
+        private var httpLog: ((String) -> Unit)? = null
         private var requestIdProvider: (() -> String?)? = null
         private var okHttpCustomizer: (OkHttpClient.Builder) -> OkHttpClient.Builder = { it }
 
@@ -59,13 +57,13 @@ object VendorClient {
         /** Enables structured audit logging of every annotated request/response via [sink]. */
         fun apiLogging(sink: VendorApiLogSink) = apply { this.logSink = sink }
 
-        /** Enables debug HTTP logging. Defaults to [Slf4jLogSink] if [sink] is omitted. */
+        /** Enables debug HTTP logging. Defaults to an SLF4J debug logger if [log] is omitted. */
         fun httpLogging(
             level: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.BODY,
-            sink: LogSink = Slf4jLogSink(LoggerFactory.getLogger(HttpLoggingInterceptor::class.java)),
+            log: (String) -> Unit = LoggerFactory.getLogger(HttpLoggingInterceptor::class.java)::debug,
         ) = apply {
             this.httpLogLevel = level
-            this.httpLogSink = sink
+            this.httpLog = log
         }
 
         /**
@@ -118,10 +116,10 @@ object VendorClient {
                     )
                 )
             }
-            httpLogSink?.let {
+            httpLog?.let {
                 okHttpBuilder.addInterceptor(
                     HttpLoggingInterceptor(
-                        log = it::log,
+                        log = it,
                         level = httpLogLevel,
                         sensitiveHeaders = settings.sensitiveHeaders,
                     )
