@@ -5,6 +5,7 @@ import vendorClient.response.NetworkExceptionType
 import vendorClient.response.NetworkResponse
 import io.mockk.*
 import okhttp3.Request
+import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -55,4 +56,35 @@ class RetrofitNetworkCallAdapterFactoryTest {
 
     @Test fun `unknown Throwable maps to UNEXPECTED`() =
         assertEquals(NetworkExceptionType.UNEXPECTED, executeFailure(RuntimeException("x")).exceptionType)
+
+    private fun callThatReturns(response: Response<String>): Call<String> = mockk {
+        every { execute() } returns response
+        every { request() } returns Request.Builder().url("https://example.com").build()
+        every { timeout() } returns mockk(relaxed = true)
+        every { clone() } returns this
+    }
+
+    @Test fun `execute runs synchronously and maps a successful response`() {
+        val delegate = callThatReturns(Response.success("hello"))
+        val result = NetworkResponseCall(delegate).execute().body()
+        val success = assertIs<NetworkResponse.Success<String>>(result)
+        assertEquals("hello", success.data)
+    }
+
+    @Test fun `execute maps an unsuccessful response to Error instead of throwing`() {
+        val delegate = callThatReturns(Response.error(500, "".toResponseBody()))
+        val result = NetworkResponseCall(delegate).execute().body()
+        assertEquals(NetworkExceptionType.HTTP, (result as NetworkResponse.Error).exceptionType)
+    }
+
+    @Test fun `execute maps a thrown exception to Error instead of propagating it`() {
+        val delegate: Call<String> = mockk {
+            every { execute() } throws IOException("boom")
+            every { request() } returns Request.Builder().url("https://example.com").build()
+            every { timeout() } returns mockk(relaxed = true)
+            every { clone() } returns this
+        }
+        val result = NetworkResponseCall(delegate).execute().body()
+        assertEquals(NetworkExceptionType.NETWORK, (result as NetworkResponse.Error).exceptionType)
+    }
 }

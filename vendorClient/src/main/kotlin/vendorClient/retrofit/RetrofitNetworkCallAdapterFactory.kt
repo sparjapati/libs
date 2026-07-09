@@ -36,52 +36,70 @@ private class NetworkResponseAdapter<T>(private val responseType: Type) : CallAd
 }
 
 internal class NetworkResponseCall<T>(private val delegate: Call<T>) : Call<NetworkResponse<T>> {
+
+    private fun toNetworkResponse(response: Response<T>): NetworkResponse<T> =
+        if (response.isSuccessful) {
+            @Suppress("UNCHECKED_CAST")
+            NetworkResponse.Success(
+                data = response.body() as T,
+                responseCode = response.code(),
+                request = delegate.request(),
+                rawResponse = response,
+            )
+        } else {
+            NetworkResponse.Error(
+                message = response.message(),
+                exceptionType = NetworkExceptionType.HTTP,
+                errorBody = response.errorBody()?.string(),
+                responseCode = response.code(),
+                request = delegate.request(),
+                rawResponse = response,
+            )
+        }
+
+    private fun toNetworkResponse(t: Throwable): NetworkResponse<T> =
+        NetworkResponse.Error(
+            message = t.message,
+            exceptionType = when (t) {
+                is VendorApiRateLimitExceededException -> NetworkExceptionType.RATE_LIMITED
+                is VendorApiDisabledException -> NetworkExceptionType.API_DISABLED
+                is VendorApiTemporarilyDisabledException -> NetworkExceptionType.TEMP_API_DISABLED
+                is VendorApiCircuitOpenException -> NetworkExceptionType.CIRCUIT_OPEN
+                is IOException -> NetworkExceptionType.NETWORK
+                else -> NetworkExceptionType.UNEXPECTED
+            },
+            errorBody = null,
+            responseCode = 0,
+            request = delegate.request(),
+            rawResponse = null,
+        )
+
     override fun enqueue(callback: Callback<NetworkResponse<T>>) {
         delegate.enqueue(object : Callback<T> {
             override fun onResponse(call: Call<T>, response: Response<T>) {
-                val networkResponse = if (response.isSuccessful) {
-                    @Suppress("UNCHECKED_CAST")
-                    NetworkResponse.Success(
-                        data = response.body() as T,
-                        responseCode = response.code(),
-                        request = delegate.request(),
-                        rawResponse = response,
-                    )
-                } else {
-                    NetworkResponse.Error(
-                        message = response.message(),
-                        exceptionType = NetworkExceptionType.HTTP,
-                        errorBody = response.errorBody()?.string(),
-                        responseCode = response.code(),
-                        request = delegate.request(),
-                        rawResponse = response,
-                    )
-                }
-                callback.onResponse(this@NetworkResponseCall, Response.success(networkResponse))
+                callback.onResponse(this@NetworkResponseCall, Response.success(toNetworkResponse(response)))
             }
 
             override fun onFailure(call: Call<T>, t: Throwable) {
-                val networkResponse = NetworkResponse.Error(
-                    message = t.message,
-                    exceptionType = when (t) {
-                        is VendorApiRateLimitExceededException -> NetworkExceptionType.RATE_LIMITED
-                        is VendorApiDisabledException -> NetworkExceptionType.API_DISABLED
-                        is VendorApiTemporarilyDisabledException -> NetworkExceptionType.TEMP_API_DISABLED
-                        is VendorApiCircuitOpenException -> NetworkExceptionType.CIRCUIT_OPEN
-                        is IOException -> NetworkExceptionType.NETWORK
-                        else -> NetworkExceptionType.UNEXPECTED
-                    },
-                    errorBody = null,
-                    responseCode = 0,
-                    request = delegate.request(),
-                    rawResponse = null,
-                )
-                callback.onResponse(this@NetworkResponseCall, Response.success(networkResponse))
+                callback.onResponse(this@NetworkResponseCall, Response.success(toNetworkResponse(t)))
             }
         })
     }
 
-    override fun execute(): Response<NetworkResponse<T>> = throw UnsupportedOperationException()
+    /**
+     * Runs synchronously on the calling thread, same as any other Retrofit [Call.execute] — no
+     * dispatcher/executor involved. Exceptions from [delegate]'s call are mapped to
+     * [NetworkResponse.Error] just like [enqueue]'s failure path, never thrown.
+     */
+    override fun execute(): Response<NetworkResponse<T>> {
+        val networkResponse = try {
+            toNetworkResponse(delegate.execute())
+        } catch (t: Throwable) {
+            toNetworkResponse(t)
+        }
+        return Response.success(networkResponse)
+    }
+
     override fun isExecuted(): Boolean = delegate.isExecuted
     override fun cancel() = delegate.cancel()
     override fun isCanceled(): Boolean = delegate.isCanceled
