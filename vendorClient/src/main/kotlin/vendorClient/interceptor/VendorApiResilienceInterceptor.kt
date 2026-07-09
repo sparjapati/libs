@@ -73,7 +73,7 @@ class VendorApiResilienceInterceptor(
 
         return try {
             supplier.get()
-        } catch (e: CallNotPermittedException) {
+        } catch (_: CallNotPermittedException) {
             throw VendorApiCircuitOpenException(api)
         } catch (e: IOException) {
             throw e
