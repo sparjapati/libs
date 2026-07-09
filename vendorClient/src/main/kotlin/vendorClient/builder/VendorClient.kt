@@ -59,7 +59,7 @@ object VendorClient {
         /** Enables debug HTTP logging. Defaults to an SLF4J debug logger if [log] is omitted. */
         fun httpLogging(
             level: HttpLoggingInterceptor.Level = HttpLoggingInterceptor.Level.BODY,
-            log: (String) -> Unit = LoggerFactory.getLogger(HttpLoggingInterceptor::class.java)::debug,
+            log: (String) -> Unit = LoggerFactory.getLogger(HttpLoggingInterceptor::class.java)::info,
         ) = apply {
             this.httpLogLevel = level
             this.httpLog = log
