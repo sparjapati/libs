@@ -38,7 +38,7 @@ private class NetworkResponseAdapter<T>(private val responseType: Type) : CallAd
 internal class NetworkResponseCall<T>(private val delegate: Call<T>) : Call<NetworkResponse<T>> {
     override fun enqueue(callback: Callback<NetworkResponse<T>>) {
         delegate.enqueue(object : Callback<T> {
-            override fun onResponse(call: Call<T>, response: retrofit2.Response<T>) {
+            override fun onResponse(call: Call<T>, response: Response<T>) {
                 val networkResponse = if (response.isSuccessful) {
                     @Suppress("UNCHECKED_CAST")
                     NetworkResponse.Success(
@@ -57,7 +57,7 @@ internal class NetworkResponseCall<T>(private val delegate: Call<T>) : Call<Netw
                         rawResponse = response,
                     )
                 }
-                callback.onResponse(this@NetworkResponseCall, retrofit2.Response.success(networkResponse))
+                callback.onResponse(this@NetworkResponseCall, Response.success(networkResponse))
             }
 
             override fun onFailure(call: Call<T>, t: Throwable) {
@@ -76,12 +76,12 @@ internal class NetworkResponseCall<T>(private val delegate: Call<T>) : Call<Netw
                     request = delegate.request(),
                     rawResponse = null,
                 )
-                callback.onResponse(this@NetworkResponseCall, retrofit2.Response.success(networkResponse))
+                callback.onResponse(this@NetworkResponseCall, Response.success(networkResponse))
             }
         })
     }
 
-    override fun execute(): retrofit2.Response<NetworkResponse<T>> = throw UnsupportedOperationException()
+    override fun execute(): Response<NetworkResponse<T>> = throw UnsupportedOperationException()
     override fun isExecuted(): Boolean = delegate.isExecuted
     override fun cancel() = delegate.cancel()
     override fun isCanceled(): Boolean = delegate.isCanceled
