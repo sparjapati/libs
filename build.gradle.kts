@@ -37,3 +37,12 @@ project(":vendorClient-apilog-jpa") {
 project(":vendorClient-ratelimiter-redis") {
     version = property("vendorClientRateLimiterRedisVersion") as String
 }
+project(":cacheStore") {
+    version = property("cacheStoreVersion") as String
+}
+project(":cacheStore-mysql") {
+    version = property("cacheStoreMysqlVersion") as String
+}
+project(":cacheStore-mongo") {
+    version = property("cacheStoreMongoVersion") as String
+}

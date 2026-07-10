@@ -19,6 +19,9 @@ All artifacts are published under `com.sparjapati` and consumed via `mavenLocal(
 | `vendorClient-apiconfig-jpa` | 0.0.1 | JPA-backed vendor API config store |
 | `vendorClient-apilog-jpa` | 0.0.1 | JPA-backed vendor API log persistence |
 | `vendorClient-ratelimiter-redis` | 0.0.1 | Redis sliding-window rate limiter for vendorClient |
+| `cacheStore` | 0.0.1 | Pluggable Spring `CacheManager`/`Cache` — works with standard `@Cacheable`, backed by any storage |
+| `cacheStore-mysql` | 0.0.1 | JPA-backed `CacheStore` adapter for cacheStore |
+| `cacheStore-mongo` | 0.0.1 | MongoDB-backed `CacheStore` adapter for cacheStore |
 
 ---
 
@@ -46,6 +49,29 @@ required. See [`vendorClient/README.md`](vendorClient/README.md) for full usage.
 
 ---
 
+## cacheStore family
+
+Same shape as the `vendorClient` family — one core module implementing Spring's `CacheManager`/
+`Cache` SPI against a pluggable `CacheStore` interface, plus one adapter module per backend:
+
+```kotlin
+// build.gradle.kts
+dependencies {
+    implementation("com.sparjapati:cacheStore:0.0.1")
+
+    // Pick the adapter(s) you need
+    runtimeOnly("com.sparjapati:cacheStore-mysql:0.0.1")
+    runtimeOnly("com.sparjapati:cacheStore-mongo:0.0.1") // requires an existing Mongo connection
+}
+```
+
+Each adapter self-registers a uniquely-named `CacheStore` bean and `CacheManager` bean
+(`mysqlCacheManager`, `mongoCacheManager`) — select one per call site with
+`@Cacheable(cacheManager = "...")`, the same way you'd pick between Caffeine/Redis. Implement
+`CacheStore` yourself for any other backend; see [`cacheStore/README.md`](cacheStore/README.md).
+
+---
+
 ## Publishing
 
 ```bash
@@ -57,6 +83,11 @@ required. See [`vendorClient/README.md`](vendorClient/README.md) for full usage.
           :vendorClient-apiconfig-jpa:publishToMavenLocal \
           :vendorClient-apilog-jpa:publishToMavenLocal \
           :vendorClient-ratelimiter-redis:publishToMavenLocal
+
+# Publish all cacheStore modules at once
+./gradlew :cacheStore:publishToMavenLocal \
+          :cacheStore-mysql:publishToMavenLocal \
+          :cacheStore-mongo:publishToMavenLocal
 
 # Run all tests
 ./gradlew test
