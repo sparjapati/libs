@@ -8,6 +8,7 @@ import com.service.EntityValidationCache
 import org.slf4j.LoggerFactory
 import org.springframework.aop.aspectj.AspectJExpressionPointcut
 import org.springframework.aop.support.DefaultPointcutAdvisor
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.EnableAspectJAutoProxy
@@ -41,8 +42,8 @@ class EntityValidationConfiguration : ImportAware {
     fun entityValidationCache(): EntityValidationCache = EntityValidationCache()
 
     @Bean
-    fun entityLookupRegistry(services: List<EntityLookupService>): EntityLookupRegistry =
-        EntityLookupRegistry(services)
+    fun entityLookupRegistry(servicesProvider: ObjectProvider<List<EntityLookupService>>): EntityLookupRegistry =
+        EntityLookupRegistry(servicesProvider)
 
     @Bean
     fun entityValidationAdvisor(
