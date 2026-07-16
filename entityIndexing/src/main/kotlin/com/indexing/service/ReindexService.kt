@@ -18,7 +18,7 @@ open class ReindexService(
 
     @Transactional(readOnly = true)
     @Suppress("UNCHECKED_CAST")
-    fun reindex(entityClass: KClass<*>, ids: Collection<String>): List<AbstractEntityIndex> {
+    open fun reindex(entityClass: KClass<*>, ids: Collection<String>): List<AbstractEntityIndex> {
         if (ids.isEmpty()) return emptyList()
 
         val converter = converterRegistry.get<Any, AbstractEntityIndex>(entityClass)
