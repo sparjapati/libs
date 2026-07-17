@@ -37,7 +37,7 @@ Background thread
     ▼
 BatchJobService.launch(file, processorType, jobId)
     │
-    ├── validates processorType is registered
+    ├── throws IllegalArgumentException if processorType isn't registered
     └── runs Spring Batch job synchronously (blocks until complete)
                │
                ▼
@@ -73,14 +73,15 @@ The consuming app calls `launch()` on a background thread.
 BatchJobService.launch(
     sourceFile: File,       ← caller wrote the MultipartFile bytes here
     processorType: String,  ← routes to the right FileProcessor
-    jobId: String,          ← caller generated this before submitting to executor
-)
+    jobId: String = <random UUID>, ← caller generated this before submitting to executor
+): String                  ← the jobId that was used (caller-supplied or generated)
 ```
 
-- Looks up the `FileProcessor` from `FileProcessorRegistry` by `processorType`.
+- Looks up the `FileProcessor` from `FileProcessorRegistry` by `processorType`; throws `IllegalArgumentException` if none is registered.
 - Builds Spring Batch `JobParameters` (jobId, processorType, filePath, fileType, startedAt).
 - Calls `FileProcessingJobFactory.create(...)` to assemble the `Job`.
 - Calls `job.execute(jobExecution)` — **blocks** until the job finishes.
+- Returns the resolved `jobId`. Only useful for recovering a caller-omitted, auto-generated `jobId` after the fact — if you need `jobId` to build an immediate HTTP response (the usual case), generate and pass it in yourself rather than relying on the return value, since `launch()` isn't meant to be called synchronously from the HTTP thread.
 
 ### 2. `FileProcessingJobFactory` — job assembly
 
@@ -412,7 +413,7 @@ class InvoiceUploadProcessor(...) : FileProcessor<Invoice>, BulkJobCompletionHan
 
 ## Triggering an Upload
 
-Inject `BatchJobService` into your controller. Write the uploaded file to disk (so it survives the HTTP thread), generate a `jobId`, submit `launch()` to a background executor, and return the `jobId` immediately:
+Inject `BatchJobService` into your controller. Write the uploaded file to disk (so it survives the HTTP thread), generate a `jobId`, submit `launch()` to a background executor, and return the `jobId` immediately. `jobId` has a default (a random UUID) for callers who don't need it before dispatch, but the immediate-HTTP-response pattern below only works if you generate and pass it in explicitly, as shown:
 
 ```kotlin
 @RestController
@@ -451,6 +452,8 @@ class BulkUploadController(
 ```
 
 `launch()` runs synchronously on the background thread and blocks until the job completes. The HTTP thread returns `jobId` immediately without waiting.
+
+`launch()` throws `IllegalArgumentException` if `processorType` has no registered `FileProcessor`. Since it typically runs inside `executor.submit { ... }`, an uncaught exception there is only seen by the executor's uncaught-exception handling, not the HTTP response already sent — wrap the call in a `try`/`catch` (e.g. to update a job-status store) if the consuming app needs to react to that failure.
 
 ---
 

@@ -12,7 +12,7 @@ All artifacts are published under `com.sparjapati` and consumed via `mavenLocal(
 |---|---|---|
 | `dbstore` | 0.0.1 | Entity-level DB caching (`@EnableDbStoreCaching`) |
 | `entityLookup` | 0.0.1 | Entity validation and lookup (`@EnableEntityValidation`) |
-| `bulkFileProcessing` | 0.0.1 | Bulk file import pipeline (`@EnableBulkFileProcessing`) |
+| `bulkFileProcessing` | 0.0.2 | Bulk file import pipeline (`@EnableBulkFileProcessing`) |
 | `entityIndexing` | 0.0.1 | Reindex-on-write pipeline (`@EnableEntityIndexing`) |
 | `pageFiltering` | 0.0.1 | Pagination, filtering, and sorting resolver |
 | `vendorClient` | 0.0.1 | HTTP vendor client — rate limiting, resilience, trace, logging |

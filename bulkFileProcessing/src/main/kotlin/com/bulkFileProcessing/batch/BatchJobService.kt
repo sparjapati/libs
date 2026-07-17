@@ -7,6 +7,7 @@ import org.springframework.batch.core.job.parameters.JobParametersBuilder
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.infrastructure.item.ExecutionContext
 import java.io.File
+import java.util.UUID
 
 /**
  * Orchestrates bulk file processing: saves the uploaded file to a temp location,
@@ -43,23 +44,23 @@ class BatchJobService(
      * @param sourceFile       pre-written file on disk containing the CSV or XLSX content.
      * @param processorType    identifier that maps to a registered [FileProcessor].
      * @param jobId            caller-supplied identifier so the response can be built before this
-     *                         method is dispatched to a background thread.
+     *                         method is dispatched to a background thread. Defaults to a random
+     *                         UUID when the caller doesn't need to know it up front; the resolved
+     *                         value is returned so it can still be recovered after the call.
      * @param originalFileName the original uploaded filename (e.g. from [MultipartFile.originalFilename]);
      *                         used to name the result file. Defaults to the source file's own name.
+     * @return the [jobId] that was used for this run (either the caller-supplied value or the
+     *         generated UUID).
+     * @throws IllegalArgumentException if no [FileProcessor] is registered for [processorType].
      */
     fun launch(
         sourceFile: File,
         processorType: String,
-        jobId: String,
+        jobId: String = UUID.randomUUID().toString(),
         originalFileName: String = sourceFile.name,
-    ) {
-        val processor = registry.find(processorType)
-        if (processor == null) {
-            LOGGER.error(
-                "No FileProcessor registered for processorType='{}' jobId={} — job not started",
-                processorType, jobId,
-            )
-            return
+    ): String {
+        val processor = requireNotNull(registry.find(processorType)) {
+            "BatchJobService.launch: no FileProcessor registered for processorType='$processorType' jobId=$jobId"
         }
         val extension = sourceFile.extension.lowercase().ifEmpty { "csv" }
         LOGGER.info(
@@ -90,5 +91,6 @@ class BatchJobService(
             "Bulk job finished jobId={} processorType={} status={}",
             jobId, processorType, jobExecution.status,
         )
+        return jobId
     }
 }
