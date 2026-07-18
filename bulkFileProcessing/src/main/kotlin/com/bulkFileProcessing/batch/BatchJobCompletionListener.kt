@@ -18,18 +18,18 @@ import org.springframework.batch.core.listener.JobExecutionListener
  * time by [FileProcessingJobFactory] and passed in directly — this listener has no
  * registry dependency.
  *
- * @param writer            the per-job [ResultFileWriter] that produces the annotated output file.
- * @param handler           the completion handler for this processor type, or `null` if none registered.
- * @param jobStore          receives the final [BulkJobRecord] for this job run.
- * @param originalFileName  the original uploaded filename, carried through from [BatchJobService.launch].
- * @param startedAt         epoch millis when the job was launched, carried through from [BatchJobService.launch].
+ * @param writer        the per-job [ResultFileWriter] that produces the annotated output file.
+ * @param handler       the completion handler for this processor type, or `null` if none registered.
+ * @param jobStore      receives the final [BulkJobRecord] for this job run.
+ * @param initialRecord the STARTED [BulkJobRecord] built by [BatchJobService.launch] and carried through
+ *                      by [FileProcessingJobFactory]; the final record is derived from it via [BulkJobRecord.copy]
+ *                      so unchanged fields (jobId, processorType, originalFileName, startedAt) aren't restated.
  */
 class BatchJobCompletionListener(
     private val writer: ResultFileWriter,
     private val handler: BulkJobCompletionHandler?,
     private val jobStore: BulkJobStore,
-    private val originalFileName: String,
-    private val startedAt: Long,
+    private val initialRecord: BulkJobRecord,
 ) : JobExecutionListener {
 
     companion object {
@@ -57,16 +57,12 @@ class BatchJobCompletionListener(
             .takeIf { jobExecution.status == BatchStatus.FAILED }
 
         trySave(
-            BulkJobRecord(
-                jobId = jobId,
-                processorType = processorType,
+            initialRecord.copy(
                 status = jobExecution.status,
                 writeCount = writeCount,
                 skipCount = skipCount,
                 resultFilePath = resultFilePath,
                 errorMessage = errorMessage,
-                originalFileName = originalFileName,
-                startedAt = startedAt,
                 completedAt = System.currentTimeMillis(),
             ),
         )

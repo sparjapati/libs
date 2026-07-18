@@ -1,6 +1,7 @@
 package com.bulkFileProcessing.batch
 
 import com.bulkFileProcessing.batch.reader.SpreadsheetItemReader
+import com.bulkFileProcessing.jobstore.BulkJobRecord
 import com.bulkFileProcessing.jobstore.BulkJobStore
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -51,12 +52,13 @@ class FileProcessingJobFactory(
      * runtime because generic type parameters are erased by the JVM; the cast only
      * satisfies the Kotlin compiler so the [StepBuilder] chunk types align.
      *
-     * @param processor        the domain-specific processor to use.
-     * @param jobId            unique identifier for this run — used to name the Job and Step.
-     * @param filePath         absolute path to the uploaded temp file.
-     * @param fileType         "csv" or "xlsx".
-     * @param originalFileName the original uploaded filename; used to name the result file.
-     * @param startedAt        epoch millis when the job was launched; carried into the final job record.
+     * @param processor     the domain-specific processor to use.
+     * @param jobId         unique identifier for this run — used to name the Job and Step.
+     * @param filePath      absolute path to the uploaded temp file.
+     * @param fileType      "csv" or "xlsx".
+     * @param initialRecord the STARTED [BulkJobRecord] already saved by [BatchJobService.launch];
+     *                      carried through to [BatchJobCompletionListener] so the final record can be
+     *                      built via [BulkJobRecord.copy] instead of restating unchanged fields.
      */
     @Suppress("UNCHECKED_CAST")
     fun create(
@@ -64,8 +66,7 @@ class FileProcessingJobFactory(
         jobId: String,
         filePath: String,
         fileType: String,
-        originalFileName: String,
-        startedAt: Long,
+        initialRecord: BulkJobRecord,
     ): Job {
         LOGGER.debug(
             "Creating batch job jobId={} processorType={} fileType={} chunkSize={} skipLimit={}",
@@ -77,7 +78,7 @@ class FileProcessingJobFactory(
             accumulator = accumulator,
             fileType = fileType,
             processorType = processor.processorType,
-            originalFileName = originalFileName,
+            originalFileName = initialRecord.originalFileName,
             resultBaseDir = resultBaseDir,
             declaredExtraColumns = processor.extraColumns,
         )
@@ -86,8 +87,7 @@ class FileProcessingJobFactory(
             writer = fileWriter,
             handler = handlerRegistry.find(processor.processorType),
             jobStore = jobStore,
-            originalFileName = originalFileName,
-            startedAt = startedAt,
+            initialRecord = initialRecord,
         )
 
         val rowReader = typedProcessor.rowReader()

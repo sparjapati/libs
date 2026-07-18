@@ -42,7 +42,7 @@ class BatchJobServiceTest {
         assertEquals(BatchStatus.FAILED, recordSlot.captured.status)
         assertEquals("job-1", recordSlot.captured.jobId)
         assertEquals("no FileProcessor registered for processorType='unknown'", recordSlot.captured.errorMessage)
-        verify(exactly = 0) { jobFactory.create(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { jobFactory.create(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -60,9 +60,9 @@ class BatchJobServiceTest {
         every { jobRepository.createJobInstance("job-job-1", any()) } returns jobInstance
         every { jobRepository.createJobExecution(jobInstance, any(), any()) } returns jobExecution
 
-        val startedAtSlot = slot<Long>()
+        val initialRecordSlot = slot<BulkJobRecord>()
         every {
-            jobFactory.create(any(), any(), any(), any(), any(), capture(startedAtSlot))
+            jobFactory.create(any(), any(), any(), any(), capture(initialRecordSlot))
         } returns job
 
         val recordSlot = slot<BulkJobRecord>()
@@ -80,7 +80,8 @@ class BatchJobServiceTest {
         assertEquals(BatchStatus.STARTED, recordSlot.captured.status)
         assertEquals("invoice-upload", recordSlot.captured.processorType)
         assertEquals("invoices.csv", recordSlot.captured.originalFileName)
-        assertEquals(startedAtSlot.captured, recordSlot.captured.startedAt)
+        assertEquals(initialRecordSlot.captured.startedAt, recordSlot.captured.startedAt)
+        assertEquals(recordSlot.captured, initialRecordSlot.captured)
         verify { jobStore.save(any()) }
     }
 
@@ -98,7 +99,7 @@ class BatchJobServiceTest {
         every { jobExecution.status } returns BatchStatus.COMPLETED
         every { jobRepository.createJobInstance("job-job-2", any()) } returns jobInstance
         every { jobRepository.createJobExecution(jobInstance, any(), any()) } returns jobExecution
-        every { jobFactory.create(any(), any(), any(), any(), any(), any()) } returns job
+        every { jobFactory.create(any(), any(), any(), any(), any()) } returns job
         every { jobStore.save(any()) } throws RuntimeException("store down")
 
         val file = createTempFile(suffix = ".csv").toFile()

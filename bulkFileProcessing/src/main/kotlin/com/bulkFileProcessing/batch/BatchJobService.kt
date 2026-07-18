@@ -89,20 +89,19 @@ class BatchJobService(
             throw IllegalArgumentException("BatchJobService.launch: $errorMessage jobId=$jobId")
         }
 
-        trySave(
-            BulkJobRecord(
-                jobId = jobId,
-                processorType = processorType,
-                status = BatchStatus.STARTED,
-                writeCount = 0,
-                skipCount = 0,
-                resultFilePath = null,
-                errorMessage = null,
-                originalFileName = originalFileName,
-                startedAt = startedAt,
-                completedAt = null,
-            ),
+        val initialRecord = BulkJobRecord(
+            jobId = jobId,
+            processorType = processorType,
+            status = BatchStatus.STARTED,
+            writeCount = 0,
+            skipCount = 0,
+            resultFilePath = null,
+            errorMessage = null,
+            originalFileName = originalFileName,
+            startedAt = startedAt,
+            completedAt = null,
         )
+        trySave(initialRecord)
 
         val extension = sourceFile.extension.lowercase().ifEmpty { "csv" }
         LOGGER.info(
@@ -123,8 +122,7 @@ class BatchJobService(
             jobId = jobId,
             filePath = sourceFile.absolutePath,
             fileType = extension,
-            originalFileName = originalFileName,
-            startedAt = startedAt,
+            initialRecord = initialRecord,
         )
 
         val jobInstance = jobRepository.createJobInstance(job.name, params)
