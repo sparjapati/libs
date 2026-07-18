@@ -102,11 +102,12 @@ class FileProcessingJobFactory(
 
                 // Split rowReader results: record business failures immediately; pass only successes onward.
                 val readerResults = rowReader(rows)
-                val successMap = linkedMapOf<SpreadsheetRow, Any>()
-                for ((row, result) in readerResults) {
-                    when (result) {
-                        is RowResult.Success -> successMap[row] = result.value
-                        is RowResult.Failure -> accumulator.recordError(rowNumber = row.rowNumber, error = result.error)
+                val successMap = buildMap<SpreadsheetRow, Any> {
+                    for ((row, result) in readerResults) {
+                        when (result) {
+                            is RowResult.Success -> put(row, result.value)
+                            is RowResult.Failure -> accumulator.recordError(rowNumber = row.rowNumber, error = result.error)
+                        }
                     }
                 }
 

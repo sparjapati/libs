@@ -99,7 +99,7 @@ class ResultFileWriter(
     }
 
     private fun writeCsv(outputFile: File) {
-        val hdrs = accumulator.headers!!
+        val hdrs = checkNotNull(accumulator.headers) { "ResultFileWriter.writeCsv: accumulator.headers is null — no rows were recorded" }
         val extraCols = extraColumnNames
         val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN + extraCols
 
@@ -123,7 +123,7 @@ class ResultFileWriter(
     }
 
     private fun writeXlsx(outputFile: File) {
-        val hdrs = accumulator.headers!!
+        val hdrs = checkNotNull(accumulator.headers) { "ResultFileWriter.writeXlsx: accumulator.headers is null — no rows were recorded" }
         val extraCols = extraColumnNames
         val outputHeaders = hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN + extraCols
 

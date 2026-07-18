@@ -51,7 +51,7 @@ class XlsxSpreadsheetReaderTest {
         )
 
         val reader = XlsxSpreadsheetReader(filePath = file.absolutePath)
-        val row = reader.read()!!
+        val row = checkNotNull(reader.read()) { "expected a row but reader.read() returned null" }
 
         assertEquals("Alice", row.values["name"])
         assertEquals("alice@example.com", row.values["email"])

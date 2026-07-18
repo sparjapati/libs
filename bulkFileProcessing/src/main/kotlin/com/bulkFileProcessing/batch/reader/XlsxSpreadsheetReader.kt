@@ -34,19 +34,17 @@ class XlsxSpreadsheetReader(filePath: String) : ItemReader<SpreadsheetRow> {
 
     override fun read(): SpreadsheetRow? = if (rowIterator.hasNext()) rowIterator.next() else null
 
-    private fun parseRows(filePath: String): List<SpreadsheetRow> {
-        val result = mutableListOf<SpreadsheetRow>()
-
+    private fun parseRows(filePath: String): List<SpreadsheetRow> = buildList {
         OPCPackage.open(File(filePath)).use { pkg ->
             val xssfReader = XSSFReader(pkg)
             val sharedStrings = ReadOnlySharedStringsTable(pkg)
             val styles = xssfReader.stylesTable
             val sheetsData = xssfReader.sheetsData
 
-            if (!sheetsData.hasNext()) return result
+            if (!sheetsData.hasNext()) return@buildList
 
             sheetsData.next().use { sheetStream ->
-                val handler = RowCollectingHandler(result = result)
+                val handler = RowCollectingHandler(result = this)
                 XMLHelper.newXMLReader().also { xmlReader ->
                     xmlReader.contentHandler = XSSFSheetXMLHandler(
                         styles, null, sharedStrings, handler, DataFormatter(), false,
@@ -55,8 +53,6 @@ class XlsxSpreadsheetReader(filePath: String) : ItemReader<SpreadsheetRow> {
                 }
             }
         }
-
-        return result
     }
 
     /**

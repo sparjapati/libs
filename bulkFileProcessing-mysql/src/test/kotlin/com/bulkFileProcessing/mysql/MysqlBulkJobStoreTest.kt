@@ -51,14 +51,14 @@ class MysqlBulkJobStoreTest {
     fun `findAll delegates to the filtered repository query and maps results`() {
         val pageable = PageRequest.of(0, 10)
         every {
-            repository.findAllFiltered("invoice-upload", BatchStatus.COMPLETED, pageable)
+            repository.findAllFiltered(processorType = "invoice-upload", status = BatchStatus.COMPLETED, pageable = pageable)
         } returns PageImpl(listOf(sampleEntity()))
 
         val page = store.findAll(processorType = "invoice-upload", status = BatchStatus.COMPLETED, pageable = pageable)
 
         assertEquals(1L, page.totalElements)
         assertEquals("job-1", page.content.single().jobId)
-        verify { repository.findAllFiltered("invoice-upload", BatchStatus.COMPLETED, pageable) }
+        verify { repository.findAllFiltered(processorType = "invoice-upload", status = BatchStatus.COMPLETED, pageable = pageable) }
     }
 
     private fun sampleEntity() = BulkJobRecordEntity(

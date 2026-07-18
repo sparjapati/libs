@@ -24,9 +24,11 @@ class FileProcessorRegistry(processors: List<FileProcessor<*>>) {
     private val registry: Map<String, FileProcessor<*>> = buildMap {
         processors.forEach { processor ->
             val previous = put(processor.processorType, processor)
-            require(previous == null) {
-                "Duplicate FileProcessor for processorType='${processor.processorType}': " +
-                    "${previous!!::class.qualifiedName} and ${processor::class.qualifiedName}"
+            if (previous != null) {
+                throw IllegalArgumentException(
+                    "Duplicate FileProcessor for processorType='${processor.processorType}': " +
+                        "${previous::class.qualifiedName} and ${processor::class.qualifiedName}",
+                )
             }
             LOGGER.info(
                 "Registered FileProcessor '{}' → {}",

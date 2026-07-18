@@ -19,7 +19,7 @@ package com.bulkFileProcessing.batch
  *     override val processorType = "invoice_import"
  *
  *     override fun rowReader() = { rows: List<SpreadsheetRow> ->
- *         val ids = rows.map { it.values["vendor_id"]!! }
+ *         val ids = rows.mapNotNull { it.values["vendor_id"] }
  *         val vendors = repo.findVendorsByIds(ids).associateBy { it.id }
  *         rows.associateWith { row ->
  *             val vendor = vendors[row.values["vendor_id"]]

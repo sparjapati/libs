@@ -17,8 +17,7 @@ import java.util.UUID
  * builds the Spring Batch [Job] via [FileProcessingJobFactory], and executes it
  * synchronously in the calling thread.
  *
- * The caller is responsible for submitting this to a background executor. This
- * keeps threading and context-propagation concerns (e.g. MDC) out of the library.
+ * The caller is responsible for submitting this to a background executor.
  *
  * Uses [JobRepository.createJobExecution] + [org.springframework.batch.core.job.Job.execute]
  * directly instead of the deprecated [org.springframework.batch.core.launch.JobLauncher] API

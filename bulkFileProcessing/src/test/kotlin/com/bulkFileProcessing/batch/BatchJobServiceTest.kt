@@ -22,7 +22,12 @@ class BatchJobServiceTest {
     private val jobFactory: FileProcessingJobFactory = mockk()
     private val registry: FileProcessorRegistry = mockk()
     private val jobStore: BulkJobStore = mockk(relaxed = true)
-    private val service = BatchJobService(jobRepository, jobFactory, registry, jobStore)
+    private val service = BatchJobService(
+        jobRepository = jobRepository,
+        jobFactory = jobFactory,
+        registry = registry,
+        jobStore = jobStore,
+    )
 
     @Test
     fun `throws and records a FAILED record when processorType is not registered`() {

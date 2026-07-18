@@ -82,7 +82,7 @@ BatchJobService.launch(
 - Builds Spring Batch `JobParameters` (jobId, processorType, filePath, fileType, startedAt).
 - Calls `FileProcessingJobFactory.create(...)` to assemble the `Job`.
 - Calls `job.execute(jobExecution)` — **blocks** until the job finishes.
-- Returns the resolved `jobId`. Only useful for recovering a caller-omitted, auto-generated `jobId` after the fact — if you need `jobId` to build an immediate HTTP response (the usual case), generate and pass it in yourself rather than relying on the return value, since `launch()` isn't meant to be called synchronously from the HTTP thread.
+- Returns the resolved `jobId` — the caller-supplied value, or the generated UUID if omitted. For an immediate HTTP response, generate and pass `jobId` in yourself rather than relying on the return value.
 
 ### 2. `FileProcessingJobFactory` — job assembly
 
@@ -505,7 +505,7 @@ class BulkUploadController(
 
 `launch()` runs synchronously on the background thread and blocks until the job completes. The HTTP thread returns `jobId` immediately without waiting.
 
-`launch()` throws `IllegalArgumentException` if `processorType` has no registered `FileProcessor`. Since it typically runs inside `executor.submit { ... }`, an uncaught exception there is only seen by the executor's uncaught-exception handling, not the HTTP response already sent — wrap the call in a `try`/`catch` (e.g. to update a job-status store) if the consuming app needs to react to that failure.
+`launch()` throws `IllegalArgumentException` if `processorType` has no registered `FileProcessor`. An uncaught exception inside `executor.submit { ... }` is only seen by the executor's uncaught-exception handling, not the HTTP response already sent. Wrap the call in a `try`/`catch` (e.g. to update a job-status store) to react to that failure.
 
 ---
 
@@ -570,9 +570,8 @@ fun <T : Any> Map<SpreadsheetRow, T>.toRowResults(
 | Row persisted, return extra columns (e.g. generated ID) | Return `RowResult.withExtras("col" to value, ...)` or use `results.toRowResults { ... }` |
 | DB unavailable, network error, unexpected NPE | Throw an exception — Spring Batch isolates and skips the row |
 
-**Why two mechanisms?**
-- `RowResult.Failure` is recorded immediately without exception overhead, no Spring Batch retry cycle.
-- Throwing forces Spring Batch to retry the chunk item-by-item, which is appropriate for transient failures (DB blip) but wasteful for deterministic business errors (a row with a permanently invalid field will always fail).
+- `RowResult.Failure` is recorded immediately, with no exception overhead and no Spring Batch retry cycle.
+- Throwing triggers Spring Batch's retry: the chunk is retried item-by-item.
 
 ---
 

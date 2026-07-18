@@ -42,13 +42,17 @@ class RowAccumulator {
      * Pre-stamps each row as SUCCESS; errors are corrected by [ResultFileWriter] if needed.
      */
     fun recordRow(row: SpreadsheetRow) {
-        if (headers == null) {
+        val isFirstRow = headers == null
+        if (isFirstRow) {
             headers = row.values.keys.toList()
-            inlinePrinter.printRecord(headers!! + STATUS_COLUMN + FAILURE_REASON_COLUMN)
+        }
+        val hdrs = checkNotNull(headers) { "RowAccumulator.recordRow: headers is null after initialization" }
+        if (isFirstRow) {
+            inlinePrinter.printRecord(hdrs + STATUS_COLUMN + FAILURE_REASON_COLUMN)
         }
         _rowNumbers.add(row.rowNumber)
         inlinePrinter.printRecord(buildList {
-            headers!!.forEach { add(row.values[it].takeUnless { v -> v.isNullOrBlank() } ?: EMPTY_CELL_VALUE) }
+            hdrs.forEach { add(row.values[it].takeUnless { v -> v.isNullOrBlank() } ?: EMPTY_CELL_VALUE) }
             add(STATUS_SUCCESS)
             add(EMPTY_CELL_VALUE)
         })

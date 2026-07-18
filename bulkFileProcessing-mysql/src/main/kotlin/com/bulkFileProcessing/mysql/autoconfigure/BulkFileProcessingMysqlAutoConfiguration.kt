@@ -10,9 +10,8 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 
-// @ConditionalOnMissingBean is type-scoped here (unlike cacheStore-mysql's name-scoped check)
-// because BulkJobStore is a new interface with no common ambient Spring bean of that type to
-// collide with, unlike CacheManager.
+// @ConditionalOnMissingBean is type-scoped: BulkJobStore has no common ambient Spring bean of
+// that type to collide with.
 //
 // @AutoConfigureAfter the host app's own default JPA repository scan (Boot 4:
 // DataJpaRepositoriesAutoConfiguration) is required: that auto-configuration is itself

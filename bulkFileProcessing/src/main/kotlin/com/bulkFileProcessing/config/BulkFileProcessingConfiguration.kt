@@ -28,6 +28,10 @@ import java.io.File
 @Configuration
 class BulkFileProcessingConfiguration {
 
+    companion object {
+        private const val DEFAULT_RESULT_DIR_NAME = "bulk-processors-results"
+    }
+
     @Bean
     fun fileProcessorRegistry(processors: List<FileProcessor<*>>): FileProcessorRegistry =
         FileProcessorRegistry(processors = processors)
@@ -45,7 +49,7 @@ class BulkFileProcessingConfiguration {
         @Value("\${bulk.result-base-dir:}") resultBaseDirPath: String,
     ): FileProcessingJobFactory {
         val resultBaseDir = if (resultBaseDirPath.isBlank())
-            File(System.getProperty("java.io.tmpdir"), "bulk-processors-results")
+            File(System.getProperty("java.io.tmpdir"), DEFAULT_RESULT_DIR_NAME)
         else
             File(resultBaseDirPath)
 

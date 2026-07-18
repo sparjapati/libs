@@ -56,7 +56,12 @@ class BatchJobCompletionListenerTest {
     @Test
     fun `saves a COMPLETED record with counts and result file`() {
         every { writer.write() } returns "/tmp/result.csv"
-        val listener = BatchJobCompletionListener(writer, handler, jobStore, record())
+        val listener = BatchJobCompletionListener(
+            writer = writer,
+            handler = handler,
+            jobStore = jobStore,
+            record = record(),
+        )
         val recordSlot = slot<BulkJobRecord>()
         every { jobStore.save(capture(recordSlot)) } returns Unit
 
@@ -76,7 +81,12 @@ class BatchJobCompletionListenerTest {
     @Test
     fun `saves a FAILED record with the failure message`() {
         every { writer.write() } returns null
-        val listener = BatchJobCompletionListener(writer, handler, jobStore, record())
+        val listener = BatchJobCompletionListener(
+            writer = writer,
+            handler = handler,
+            jobStore = jobStore,
+            record = record(),
+        )
         val recordSlot = slot<BulkJobRecord>()
         every { jobStore.save(capture(recordSlot)) } returns Unit
 
@@ -90,7 +100,12 @@ class BatchJobCompletionListenerTest {
     fun `a throwing jobStore does not prevent the completion handler from running`() {
         every { writer.write() } returns "/tmp/result.csv"
         every { jobStore.save(any()) } throws RuntimeException("store down")
-        val listener = BatchJobCompletionListener(writer, handler, jobStore, record())
+        val listener = BatchJobCompletionListener(
+            writer = writer,
+            handler = handler,
+            jobStore = jobStore,
+            record = record(),
+        )
 
         listener.afterJob(jobExecution(BatchStatus.COMPLETED))
 

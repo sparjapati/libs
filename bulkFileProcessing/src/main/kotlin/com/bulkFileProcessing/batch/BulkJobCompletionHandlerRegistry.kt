@@ -25,9 +25,11 @@ class BulkJobCompletionHandlerRegistry(handlers: List<BulkJobCompletionHandler>)
     private val registry: Map<String, BulkJobCompletionHandler> = buildMap {
         handlers.forEach { handler ->
             val previous = put(handler.processorType, handler)
-            require(previous == null) {
-                "Duplicate BulkJobCompletionHandler for processorType='${handler.processorType}': " +
-                    "${previous!!::class.qualifiedName} and ${handler::class.qualifiedName}"
+            if (previous != null) {
+                throw IllegalArgumentException(
+                    "Duplicate BulkJobCompletionHandler for processorType='${handler.processorType}': " +
+                        "${previous::class.qualifiedName} and ${handler::class.qualifiedName}",
+                )
             }
             LOGGER.info(
                 "Registered BulkJobCompletionHandler '{}' → {}",
