@@ -2,7 +2,10 @@ package com.bulkFileProcessing.batch
 
 import com.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_JOB_ID
 import com.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_PROCESSOR_TYPE
+import com.bulkFileProcessing.jobstore.BulkJobRecord
+import com.bulkFileProcessing.jobstore.BulkJobStore
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.BatchStatus
 import org.springframework.batch.core.job.parameters.JobParametersBuilder
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.infrastructure.item.ExecutionContext
@@ -20,11 +23,17 @@ import java.util.UUID
  * Uses [JobRepository.createJobExecution] + [org.springframework.batch.core.job.Job.execute]
  * directly instead of the deprecated [org.springframework.batch.core.launch.JobLauncher] API
  * (deprecated in Spring Batch 6.0).
+ *
+ * Every job's lifecycle is also recorded via [jobStore] — a FAILED record before throwing
+ * for an unregistered [processorType], a STARTED record before the job executes, and a final
+ * record (written by [BatchJobCompletionListener]) after it finishes. A [jobStore] failure is
+ * logged and swallowed — it must never abort the actual file-processing job.
  */
 class BatchJobService(
     private val jobRepository: JobRepository,
     private val jobFactory: FileProcessingJobFactory,
     private val registry: FileProcessorRegistry,
+    private val jobStore: BulkJobStore,
 ) {
     companion object {
         private val LOGGER = LoggerFactory.getLogger(BatchJobService::class.java)
@@ -59,9 +68,42 @@ class BatchJobService(
         jobId: String = UUID.randomUUID().toString(),
         originalFileName: String = sourceFile.name,
     ): String {
-        val processor = requireNotNull(registry.find(processorType)) {
-            "BatchJobService.launch: no FileProcessor registered for processorType='$processorType' jobId=$jobId"
+        val startedAt = System.currentTimeMillis()
+        val processor = registry.find(processorType)
+        if (processor == null) {
+            val errorMessage = "no FileProcessor registered for processorType='$processorType'"
+            trySave(
+                BulkJobRecord(
+                    jobId = jobId,
+                    processorType = processorType,
+                    status = BatchStatus.FAILED,
+                    writeCount = 0,
+                    skipCount = 0,
+                    resultFilePath = null,
+                    errorMessage = errorMessage,
+                    originalFileName = originalFileName,
+                    startedAt = startedAt,
+                    completedAt = startedAt,
+                ),
+            )
+            throw IllegalArgumentException("BatchJobService.launch: $errorMessage jobId=$jobId")
         }
+
+        trySave(
+            BulkJobRecord(
+                jobId = jobId,
+                processorType = processorType,
+                status = BatchStatus.STARTED,
+                writeCount = 0,
+                skipCount = 0,
+                resultFilePath = null,
+                errorMessage = null,
+                originalFileName = originalFileName,
+                startedAt = startedAt,
+                completedAt = null,
+            ),
+        )
+
         val extension = sourceFile.extension.lowercase().ifEmpty { "csv" }
         LOGGER.info(
             "Starting bulk job jobId={} processorType={} fileType={} fileSizeBytes={} originalFileName={}",
@@ -73,7 +115,7 @@ class BatchJobService(
             .addString(JOB_PARAM_PROCESSOR_TYPE, processorType)
             .addString("filePath", sourceFile.absolutePath)
             .addString("fileType", extension)
-            .addLong("startedAt", System.currentTimeMillis())
+            .addLong("startedAt", startedAt)
             .toJobParameters()
 
         val job = jobFactory.create(
@@ -82,6 +124,7 @@ class BatchJobService(
             filePath = sourceFile.absolutePath,
             fileType = extension,
             originalFileName = originalFileName,
+            startedAt = startedAt,
         )
 
         val jobInstance = jobRepository.createJobInstance(job.name, params)
@@ -92,5 +135,16 @@ class BatchJobService(
             jobId, processorType, jobExecution.status,
         )
         return jobId
+    }
+
+    private fun trySave(record: BulkJobRecord) {
+        try {
+            jobStore.save(record)
+        } catch (ex: Exception) {
+            LOGGER.error(
+                "BulkJobStore.save failed for jobId={} processorType={} status={} — job continues, record not persisted",
+                record.jobId, record.processorType, record.status, ex,
+            )
+        }
     }
 }
