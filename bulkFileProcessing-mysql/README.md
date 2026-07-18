@@ -37,7 +37,7 @@ is needed in the host application for these classes.
 
 ## Database schema
 
-Table: **`bulk_job_record`**
+Table: **`bulkJobRecord`**
 
 | Column | Type | Notes |
 |---|---|---|

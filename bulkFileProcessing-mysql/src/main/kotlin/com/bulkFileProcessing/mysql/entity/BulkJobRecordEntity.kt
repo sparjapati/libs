@@ -11,7 +11,7 @@ import org.springframework.batch.core.BatchStatus
 
 @Entity(name = "bulkJobRecord")
 @Table(
-    name = "bulk_job_record",
+    name = "bulkJobRecord",
     indexes = [Index(name = "idx_bulk_job_record_processor_type_status", columnList = "processorType,status")],
 )
 class BulkJobRecordEntity {
