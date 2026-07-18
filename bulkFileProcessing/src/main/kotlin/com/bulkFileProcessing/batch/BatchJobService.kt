@@ -71,7 +71,7 @@ class BatchJobService(
         val startedAt = System.currentTimeMillis()
 
         // Base record shared by both outcomes below; only status/errorMessage/completedAt differ.
-        val initialRecord = BulkJobRecord(
+        val record = BulkJobRecord(
             jobId = jobId,
             processorType = processorType,
             status = BatchStatus.STARTED,
@@ -88,7 +88,7 @@ class BatchJobService(
         if (processor == null) {
             val errorMessage = "no FileProcessor registered for processorType='$processorType'"
             trySave(
-                initialRecord.copy(
+                record.copy(
                     status = BatchStatus.FAILED,
                     errorMessage = errorMessage,
                     completedAt = startedAt,
@@ -97,7 +97,7 @@ class BatchJobService(
             throw IllegalArgumentException("BatchJobService.launch: $errorMessage jobId=$jobId")
         }
 
-        trySave(initialRecord)
+        trySave(record)
 
         val extension = sourceFile.extension.lowercase().ifEmpty { "csv" }
         LOGGER.info(
@@ -118,7 +118,7 @@ class BatchJobService(
             jobId = jobId,
             filePath = sourceFile.absolutePath,
             fileType = extension,
-            initialRecord = initialRecord,
+            record = record,
         )
 
         val jobInstance = jobRepository.createJobInstance(job.name, params)

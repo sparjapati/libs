@@ -21,7 +21,7 @@ import org.springframework.batch.core.listener.JobExecutionListener
  * @param writer        the per-job [ResultFileWriter] that produces the annotated output file.
  * @param handler       the completion handler for this processor type, or `null` if none registered.
  * @param jobStore      receives the final [BulkJobRecord] for this job run.
- * @param initialRecord the STARTED [BulkJobRecord] built by [BatchJobService.launch] and carried through
+ * @param record the STARTED [BulkJobRecord] built by [BatchJobService.launch] and carried through
  *                      by [FileProcessingJobFactory]; the final record is derived from it via [BulkJobRecord.copy]
  *                      so unchanged fields (jobId, processorType, originalFileName, startedAt) aren't restated.
  */
@@ -29,7 +29,7 @@ class BatchJobCompletionListener(
     private val writer: ResultFileWriter,
     private val handler: BulkJobCompletionHandler?,
     private val jobStore: BulkJobStore,
-    private val initialRecord: BulkJobRecord,
+    private val record: BulkJobRecord,
 ) : JobExecutionListener {
 
     companion object {
@@ -57,7 +57,7 @@ class BatchJobCompletionListener(
             .takeIf { jobExecution.status == BatchStatus.FAILED }
 
         trySave(
-            initialRecord.copy(
+            record.copy(
                 status = jobExecution.status,
                 writeCount = writeCount,
                 skipCount = skipCount,
