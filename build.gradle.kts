@@ -19,6 +19,9 @@ project(":entityLookup") {
 project(":bulkFileProcessing") {
     version = property("bulkFileProcessingVersion") as String
 }
+project(":bulkFileProcessing-mysql") {
+    version = property("bulkFileProcessingMysqlVersion") as String
+}
 project(":entityIndexing") {
     version = property("entityIndexingVersion") as String
 }

@@ -8,6 +8,7 @@ rootProject.name = "libs"
 include("dbstore")
 include("entityLookup")
 include("bulkFileProcessing")
+include("bulkFileProcessing-mysql")
 include("entityIndexing")
 include("pageFiltering")
 include("vendorClient")
