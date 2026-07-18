@@ -49,3 +49,9 @@ project(":cacheStore-mysql") {
 project(":cacheStore-mongo") {
     version = property("cacheStoreMongoVersion") as String
 }
+project(":statusTransitionHistory") {
+    version = property("statusTransitionHistoryVersion") as String
+}
+project(":statusTransitionHistory-mysql") {
+    version = property("statusTransitionHistoryMysqlVersion") as String
+}

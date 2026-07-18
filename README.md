@@ -23,6 +23,8 @@ All artifacts are published under `com.sparjapati` and consumed via `mavenLocal(
 | `cacheStore` | 0.0.1 | Pluggable Spring `CacheManager`/`Cache` — works with standard `@Cacheable`, backed by any storage |
 | `cacheStore-mysql` | 0.0.1 | JPA-backed `CacheStore` adapter for cacheStore |
 | `cacheStore-mongo` | 0.0.1 | MongoDB-backed `CacheStore` adapter for cacheStore |
+| `statusTransitionHistory` | 0.0.1 | Append-only status-transition history log for domain entities |
+| `statusTransitionHistory-mysql` | 0.0.1 | JPA-backed `StatusTransitionStore` adapter for statusTransitionHistory |
 
 ---
 
