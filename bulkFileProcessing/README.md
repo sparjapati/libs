@@ -600,7 +600,7 @@ Spring Batch's fault-tolerant step:
 
 ```
 Job  "job-{jobId}"
- └── Step  "step-{jobId}"
+ └── Step  "job-{jobId}"
        ├── reader:     SpreadsheetItemReader     (reads one SpreadsheetRow at a time)
        ├── writer:     combined lambda           (rowReader + rowProcessor per chunk)
        ├── chunkSize:  FileProcessor.chunkSize   (default 100)
