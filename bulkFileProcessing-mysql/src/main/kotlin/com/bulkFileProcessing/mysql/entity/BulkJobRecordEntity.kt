@@ -81,6 +81,13 @@ class BulkJobRecordEntity {
         this.completedAt = completedAt
     }
 
+    /** Marks this entity [BatchStatus.FAILED] with [errorMessage] and [completedAt] set. */
+    fun markFailed(errorMessage: String, completedAt: Long) {
+        status = BatchStatus.FAILED
+        this.errorMessage = errorMessage
+        this.completedAt = completedAt
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

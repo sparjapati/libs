@@ -29,4 +29,8 @@ data class BulkJobRecord(
     val originalFileName: String,
     val startedAt: Long,
     val completedAt: Long?,
-)
+) {
+    /** Returns a copy marked [BatchStatus.FAILED] with [errorMessage] and [completedAt] set. */
+    fun markFailed(errorMessage: String, completedAt: Long): BulkJobRecord =
+        copy(status = BatchStatus.FAILED, errorMessage = errorMessage, completedAt = completedAt)
+}

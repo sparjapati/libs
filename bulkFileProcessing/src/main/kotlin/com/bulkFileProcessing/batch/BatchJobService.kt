@@ -87,13 +87,7 @@ class BatchJobService(
         val processor = registry.find(processorType)
         if (processor == null) {
             val errorMessage = "no FileProcessor registered for processorType='$processorType'"
-            trySave(
-                record.copy(
-                    status = BatchStatus.FAILED,
-                    errorMessage = errorMessage,
-                    completedAt = startedAt,
-                ),
-            )
+            trySave(record.markFailed(errorMessage = errorMessage, completedAt = startedAt))
             throw IllegalArgumentException("BatchJobService.launch: $errorMessage jobId=$jobId")
         }
 
