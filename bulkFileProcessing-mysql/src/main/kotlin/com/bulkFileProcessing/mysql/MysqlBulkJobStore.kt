@@ -1,7 +1,9 @@
 package com.bulkFileProcessing.mysql
 
+import com.bulkFileProcessing.batch.ProcessorType
 import com.bulkFileProcessing.jobstore.BulkJobRecord
 import com.bulkFileProcessing.jobstore.BulkJobStore
+import com.bulkFileProcessing.jobstore.JobId
 import com.bulkFileProcessing.mysql.mapping.toDto
 import com.bulkFileProcessing.mysql.mapping.toEntity
 import com.bulkFileProcessing.mysql.repository.BulkJobRecordJpaRepository
@@ -21,10 +23,10 @@ open class MysqlBulkJobStore(
     }
 
     @Transactional(readOnly = true)
-    override fun findById(jobId: String): BulkJobRecord? =
+    override fun findById(jobId: JobId): BulkJobRecord? =
         repository.findById(jobId).getOrNull()?.toDto()
 
     @Transactional(readOnly = true)
-    override fun findAll(processorType: String?, status: BatchStatus?, pageable: Pageable): Page<BulkJobRecord> =
-        repository.findAllFiltered(processorType, status, pageable).map { it.toDto() }
+    override fun findAll(processorType: ProcessorType?, status: BatchStatus?, pageable: Pageable): Page<BulkJobRecord> =
+        repository.findAllFiltered(processorType = processorType, status = status, pageable = pageable).map { it.toDto() }
 }

@@ -1,5 +1,6 @@
 package com.bulkFileProcessing.jobstore
 
+import com.bulkFileProcessing.batch.ProcessorType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -61,8 +62,8 @@ class InMemoryBulkJobStoreTest {
     }
 
     private fun record(
-        jobId: String,
-        processorType: String = "invoice-upload",
+        jobId: JobId,
+        processorType: ProcessorType = "invoice-upload",
         status: BatchStatus,
     ) = BulkJobRecord(
         jobId = jobId,

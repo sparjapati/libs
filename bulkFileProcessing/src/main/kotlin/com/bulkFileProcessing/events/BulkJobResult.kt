@@ -1,5 +1,7 @@
 package com.bulkFileProcessing.events
 
+import com.bulkFileProcessing.batch.ProcessorType
+import com.bulkFileProcessing.jobstore.JobId
 import org.springframework.batch.core.BatchStatus
 
 /**
@@ -15,8 +17,8 @@ import org.springframework.batch.core.BatchStatus
  * @param resultFilePath absolute path to the annotated result file, or `null` if no rows were read.
  */
 data class BulkJobResult(
-    val jobId: String,
-    val processorType: String,
+    val jobId: JobId,
+    val processorType: ProcessorType,
     val status: BatchStatus,
     val writeCount: Long,
     val skipCount: Long,

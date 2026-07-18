@@ -1,5 +1,6 @@
 package com.bulkFileProcessing.jobstore
 
+import com.bulkFileProcessing.batch.ProcessorType
 import org.springframework.batch.core.BatchStatus
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -18,7 +19,7 @@ import org.springframework.data.domain.Pageable
  */
 class NoOpBulkJobStore : BulkJobStore {
     override fun save(record: BulkJobRecord) = Unit
-    override fun findById(jobId: String): BulkJobRecord? = null
-    override fun findAll(processorType: String?, status: BatchStatus?, pageable: Pageable): Page<BulkJobRecord> =
+    override fun findById(jobId: JobId): BulkJobRecord? = null
+    override fun findAll(processorType: ProcessorType?, status: BatchStatus?, pageable: Pageable): Page<BulkJobRecord> =
         Page.empty(pageable)
 }

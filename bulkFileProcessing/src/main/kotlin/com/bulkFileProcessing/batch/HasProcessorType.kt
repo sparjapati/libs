@@ -1,5 +1,8 @@
 package com.bulkFileProcessing.batch
 
+/** Identifier for a registered [FileProcessor]/[com.bulkFileProcessing.events.BulkJobCompletionHandler] type. */
+typealias ProcessorType = String
+
 /**
  * Marker interface for components that are scoped to a specific bulk file processor type.
  *
@@ -9,5 +12,5 @@ package com.bulkFileProcessing.batch
  */
 interface HasProcessorType {
     /** Unique identifier for the processor type this component handles. */
-    val processorType: String
+    val processorType: ProcessorType
 }

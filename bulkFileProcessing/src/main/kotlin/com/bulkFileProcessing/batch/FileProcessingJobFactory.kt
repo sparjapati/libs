@@ -3,6 +3,7 @@ package com.bulkFileProcessing.batch
 import com.bulkFileProcessing.batch.reader.SpreadsheetItemReader
 import com.bulkFileProcessing.jobstore.BulkJobRecord
 import com.bulkFileProcessing.jobstore.BulkJobStore
+import com.bulkFileProcessing.jobstore.JobId
 import org.slf4j.LoggerFactory
 import java.io.File
 import org.springframework.batch.core.job.Job
@@ -63,7 +64,7 @@ class FileProcessingJobFactory(
     @Suppress("UNCHECKED_CAST")
     fun create(
         processor: FileProcessor<*>,
-        jobId: String,
+        jobId: JobId,
         filePath: String,
         fileType: String,
         record: BulkJobRecord,
@@ -142,7 +143,7 @@ class FileProcessingJobFactory(
  * @param accumulator the shared [RowAccumulator] for this job run.
  */
 private class RowSkipListener(
-    private val jobId: String,
+    private val jobId: JobId,
     private val accumulator: RowAccumulator,
 ) : SkipListener<SpreadsheetRow, SpreadsheetRow> {
 

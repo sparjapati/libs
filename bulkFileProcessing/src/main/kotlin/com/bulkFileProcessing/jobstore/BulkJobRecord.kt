@@ -1,6 +1,10 @@
 package com.bulkFileProcessing.jobstore
 
+import com.bulkFileProcessing.batch.ProcessorType
 import org.springframework.batch.core.BatchStatus
+
+/** Identifier of a single bulk file processing job run. */
+typealias JobId = String
 
 /**
  * Persisted record of a single bulk file processing job run, queryable via [BulkJobStore].
@@ -19,8 +23,8 @@ import org.springframework.batch.core.BatchStatus
  * @param completedAt      epoch millis when the job reached a terminal status, or `null` while running.
  */
 data class BulkJobRecord(
-    val jobId: String,
-    val processorType: String,
+    val jobId: JobId,
+    val processorType: ProcessorType,
     val status: BatchStatus,
     val writeCount: Long,
     val skipCount: Long,

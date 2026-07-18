@@ -1,5 +1,7 @@
 package com.bulkFileProcessing.mysql.entity
 
+import com.bulkFileProcessing.batch.ProcessorType
+import com.bulkFileProcessing.jobstore.JobId
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -17,11 +19,11 @@ import org.springframework.batch.core.BatchStatus
 class BulkJobRecordEntity {
     @Id
     @Column(name = "jobId", length = 255)
-    var jobId: String = ""
+    var jobId: JobId = ""
         private set
 
     @Column(name = "processorType", nullable = false)
-    var processorType: String = ""
+    var processorType: ProcessorType = ""
         private set
 
     @Enumerated(EnumType.STRING)
@@ -58,8 +60,8 @@ class BulkJobRecordEntity {
         private set
 
     constructor(
-        jobId: String,
-        processorType: String,
+        jobId: JobId,
+        processorType: ProcessorType,
         status: BatchStatus,
         writeCount: Long,
         skipCount: Long,

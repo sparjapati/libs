@@ -4,6 +4,7 @@ import com.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PAR
 import com.bulkFileProcessing.batch.BatchJobCompletionListener.Companion.JOB_PARAM_PROCESSOR_TYPE
 import com.bulkFileProcessing.jobstore.BulkJobRecord
 import com.bulkFileProcessing.jobstore.BulkJobStore
+import com.bulkFileProcessing.jobstore.JobId
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.BatchStatus
 import org.springframework.batch.core.job.parameters.JobParametersBuilder
@@ -63,10 +64,10 @@ class BatchJobService(
      */
     fun launch(
         sourceFile: File,
-        processorType: String,
-        jobId: String = UUID.randomUUID().toString(),
+        processorType: ProcessorType,
+        jobId: JobId = UUID.randomUUID().toString(),
         originalFileName: String = sourceFile.name,
-    ): String {
+    ): JobId {
         val startedAt = System.currentTimeMillis()
 
         // Base record shared by both outcomes below; only status/errorMessage/completedAt differ.

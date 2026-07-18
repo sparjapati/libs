@@ -4,6 +4,7 @@ import com.bulkFileProcessing.events.BulkJobCompletionHandler
 import com.bulkFileProcessing.events.BulkJobResult
 import com.bulkFileProcessing.jobstore.BulkJobRecord
 import com.bulkFileProcessing.jobstore.BulkJobStore
+import com.bulkFileProcessing.jobstore.JobId
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.BatchStatus
 import org.springframework.batch.core.job.JobExecution
@@ -40,8 +41,8 @@ class BatchJobCompletionListener(
 
     override fun afterJob(jobExecution: JobExecution) {
         val params = jobExecution.jobParameters
-        val jobId = params.getString(JOB_PARAM_JOB_ID) ?: "unknown"
-        val processorType = params.getString(JOB_PARAM_PROCESSOR_TYPE) ?: "unknown"
+        val jobId: JobId = params.getString(JOB_PARAM_JOB_ID) ?: "unknown"
+        val processorType: ProcessorType = params.getString(JOB_PARAM_PROCESSOR_TYPE) ?: "unknown"
         val writeCount = jobExecution.stepExecutions.sumOf { it.writeCount }
         val skipCount = jobExecution.stepExecutions.sumOf { it.skipCount }
 

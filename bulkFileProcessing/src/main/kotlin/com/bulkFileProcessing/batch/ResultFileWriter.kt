@@ -34,7 +34,7 @@ import java.time.LocalDate
 class ResultFileWriter(
     private val accumulator: RowAccumulator,
     private val fileType: String,
-    private val processorType: String,
+    private val processorType: ProcessorType,
     private val originalFileName: String,
     private val resultBaseDir: File,
     private val declaredExtraColumns: List<String> = emptyList(),

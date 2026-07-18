@@ -22,7 +22,7 @@ class BulkJobCompletionHandlerRegistry(handlers: List<BulkJobCompletionHandler>)
         private val LOGGER = LoggerFactory.getLogger(BulkJobCompletionHandlerRegistry::class.java)
     }
 
-    private val registry: Map<String, BulkJobCompletionHandler> = buildMap {
+    private val registry: Map<ProcessorType, BulkJobCompletionHandler> = buildMap {
         handlers.forEach { handler ->
             val previous = put(handler.processorType, handler)
             if (previous != null) {
@@ -43,5 +43,5 @@ class BulkJobCompletionHandlerRegistry(handlers: List<BulkJobCompletionHandler>)
      * Returns the [BulkJobCompletionHandler] registered for [processorType], or `null`
      * if no handler is registered for that type.
      */
-    fun find(processorType: String): BulkJobCompletionHandler? = registry[processorType]
+    fun find(processorType: ProcessorType): BulkJobCompletionHandler? = registry[processorType]
 }

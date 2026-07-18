@@ -21,7 +21,7 @@ class FileProcessorRegistry(processors: List<FileProcessor<*>>) {
         private val LOGGER = LoggerFactory.getLogger(FileProcessorRegistry::class.java)
     }
 
-    private val registry: Map<String, FileProcessor<*>> = buildMap {
+    private val registry: Map<ProcessorType, FileProcessor<*>> = buildMap {
         processors.forEach { processor ->
             val previous = put(processor.processorType, processor)
             if (previous != null) {
@@ -42,5 +42,5 @@ class FileProcessorRegistry(processors: List<FileProcessor<*>>) {
      * Returns the [FileProcessor] registered for [processorType], or `null` if none is registered.
      * The caller is responsible for handling the `null` case.
      */
-    fun find(processorType: String): FileProcessor<*>? = registry[processorType]
+    fun find(processorType: ProcessorType): FileProcessor<*>? = registry[processorType]
 }

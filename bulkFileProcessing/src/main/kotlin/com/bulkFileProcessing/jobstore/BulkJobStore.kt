@@ -1,5 +1,6 @@
 package com.bulkFileProcessing.jobstore
 
+import com.bulkFileProcessing.batch.ProcessorType
 import org.springframework.batch.core.BatchStatus
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -19,11 +20,11 @@ interface BulkJobStore {
     fun save(record: BulkJobRecord)
 
     /** Returns the record for [jobId], or `null` if none exists. */
-    fun findById(jobId: String): BulkJobRecord?
+    fun findById(jobId: JobId): BulkJobRecord?
 
     /**
      * Returns a page of records, optionally filtered by [processorType] and/or [status].
      * Pass `null` for either filter to match all values.
      */
-    fun findAll(processorType: String? = null, status: BatchStatus? = null, pageable: Pageable): Page<BulkJobRecord>
+    fun findAll(processorType: ProcessorType? = null, status: BatchStatus? = null, pageable: Pageable): Page<BulkJobRecord>
 }
