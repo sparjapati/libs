@@ -11,6 +11,7 @@ A Spring Boot library for processing large CSV and XLSX uploads asynchronously u
 - [Setup](#setup)
 - [Implementing a Processor](#implementing-a-processor)
 - [Handling Job Completion](#handling-job-completion)
+- [Querying Job Status](#querying-job-status)
 - [Triggering an Upload](#triggering-an-upload)
 - [Result File](#result-file)
 - [RowResult — Returning Errors Without Throwing](#rowresult--returning-errors-without-throwing)
@@ -225,7 +226,7 @@ class MyApplication
 | `FileProcessorRegistry` | Discovers and routes to all `FileProcessor` implementations |
 | `BulkJobCompletionHandlerRegistry` | Discovers all `BulkJobCompletionHandler` beans |
 | `FileProcessingJobFactory` | Builds Spring Batch jobs at runtime per upload |
-| `BatchJobService` | Validates processorType, executes the job, returns no value |
+| `BatchJobService` | Validates processorType, executes the job, returns the resolved `jobId` |
 | `BulkTempFileCleanupRunner` | Deletes stale inline temp files on startup |
 
 **No beans are registered unless `@EnableBulkFileProcessing` is present.** The library will not interfere with applications that include it as a dependency without opting in.
@@ -408,6 +409,57 @@ class InvoiceUploadProcessor(...) : FileProcessor<Invoice>, BulkJobCompletionHan
 **Thread safety:** handler beans are singletons. If multiple jobs of the same `processorType` run concurrently, `onJobCompleted` is called from different threads — guard any shared state.
 
 **Exceptions:** any exception thrown from `onJobCompleted` is re-thrown after logging. It does not affect temp file cleanup or the job's recorded status in Spring Batch's `JobRepository`.
+
+---
+
+## Querying Job Status
+
+While `BulkJobCompletionHandler` pushes a result to you when a job finishes, `BulkJobStore` lets you *pull* a job's current status at any time — including while it's still running.
+
+```kotlin
+@Service
+class JobStatusService(private val jobStore: BulkJobStore) {
+    fun status(jobId: String): BulkJobRecord? = jobStore.findById(jobId)
+
+    fun recentInvoiceJobs(page: Int, size: Int) = jobStore.findAll(
+        processorType = "invoice-upload",
+        pageable = PageRequest.of(page, size),
+    )
+}
+```
+
+### `BulkJobStore`
+
+| Method | Returns | Notes |
+|---|---|---|
+| `save(record)` | — | Upsert by `jobId`. Called internally by the library — you don't call this yourself. |
+| `findById(jobId)` | `BulkJobRecord?` | `null` if the job doesn't exist (or was never persisted — see below). |
+| `findAll(processorType?, status?, pageable)` | `Page<BulkJobRecord>` | Both filters optional; pass `null` to match all. |
+
+### `BulkJobRecord`
+
+| Field | Type | Description |
+|---|---|---|
+| `jobId` | `String` | Unique identifier for this job run |
+| `processorType` | `String` | Which processor handled the file |
+| `status` | `BatchStatus` | `STARTED` while running, terminal status (`COMPLETED`, `FAILED`, etc.) once finished |
+| `writeCount` | `Long` | Rows successfully written so far |
+| `skipCount` | `Long` | Rows skipped due to errors so far |
+| `resultFilePath` | `String?` | Absolute path to the annotated result file; `null` before completion or if no rows were read |
+| `errorMessage` | `String?` | Failure reason; non-null only when `status == FAILED` |
+| `originalFileName` | `String` | The original uploaded filename |
+| `startedAt` | `Long` | Epoch millis when the job was launched |
+| `completedAt` | `Long?` | Epoch millis when the job reached a terminal status; `null` while running |
+
+### Choosing a storage backend
+
+`BulkJobStore` has three implementations, selected automatically:
+
+1. **A store adapter module on the classpath** (e.g. `bulkFileProcessing-mysql`) — always wins if present, even if `bulk.job-store.type` is also set.
+2. **`bulk.job-store.type: in-memory`** in `application.yml`, if no adapter is present — records are kept in a process-local map, lost on restart, not shared across instances.
+3. **Neither (the default)** — `NoOpBulkJobStore`: `save()` discards the record, `findById()`/`findAll()` return nothing. No behavior change for existing consumers who don't need this feature.
+
+See [`bulkFileProcessing-mysql`](../bulkFileProcessing-mysql/README.md) for the durable, queryable option.
 
 ---
 

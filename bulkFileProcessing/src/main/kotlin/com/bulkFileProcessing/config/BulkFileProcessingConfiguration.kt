@@ -7,6 +7,7 @@ import com.bulkFileProcessing.batch.FileProcessor
 import com.bulkFileProcessing.batch.FileProcessingJobFactory
 import com.bulkFileProcessing.batch.FileProcessorRegistry
 import com.bulkFileProcessing.events.BulkJobCompletionHandler
+import com.bulkFileProcessing.jobstore.BulkJobStore
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -21,6 +22,8 @@ import java.io.File
  * - `bulk.result-base-dir` — root directory for result files.
  *   Defaults to `{java.io.tmpdir}/bulk-results` if not set.
  *   Result files are written to `{resultBaseDir}/{processorType}/{date}/result-{filename}.{ext}`.
+ * - `bulk.job-store.type: in-memory` — opt into `InMemoryBulkJobStore` when no store adapter
+ *   module is present (see [com.bulkFileProcessing.jobstore.BulkJobStoreDefaultsAutoConfiguration]).
  */
 @Configuration
 class BulkFileProcessingConfiguration {
@@ -38,6 +41,7 @@ class BulkFileProcessingConfiguration {
         jobRepository: JobRepository,
         transactionManager: PlatformTransactionManager,
         handlerRegistry: BulkJobCompletionHandlerRegistry,
+        jobStore: BulkJobStore,
         @Value("\${bulk.result-base-dir:}") resultBaseDirPath: String,
     ): FileProcessingJobFactory {
         val resultBaseDir = if (resultBaseDirPath.isBlank())
@@ -49,6 +53,7 @@ class BulkFileProcessingConfiguration {
             jobRepository = jobRepository,
             transactionManager = transactionManager,
             handlerRegistry = handlerRegistry,
+            jobStore = jobStore,
             resultBaseDir = resultBaseDir,
         )
     }
@@ -61,9 +66,11 @@ class BulkFileProcessingConfiguration {
         jobRepository: JobRepository,
         jobFactory: FileProcessingJobFactory,
         registry: FileProcessorRegistry,
+        jobStore: BulkJobStore,
     ): BatchJobService = BatchJobService(
         jobRepository = jobRepository,
         jobFactory = jobFactory,
         registry = registry,
+        jobStore = jobStore,
     )
 }
