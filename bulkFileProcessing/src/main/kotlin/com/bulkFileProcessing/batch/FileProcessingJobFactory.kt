@@ -56,7 +56,7 @@ class FileProcessingJobFactory(
      * @param jobId         unique identifier for this run — used to name the Job and Step.
      * @param filePath      absolute path to the uploaded temp file.
      * @param fileType      "csv" or "xlsx".
-     * @param initialRecord the STARTED [BulkJobRecord] already saved by [BatchJobService.launch];
+     * @param record the STARTED [BulkJobRecord] already saved by [BatchJobService.launch];
      *                      carried through to [BatchJobCompletionListener] so the final record can be
      *                      built via [BulkJobRecord.copy] instead of restating unchanged fields.
      */
@@ -66,7 +66,7 @@ class FileProcessingJobFactory(
         jobId: String,
         filePath: String,
         fileType: String,
-        initialRecord: BulkJobRecord,
+        record: BulkJobRecord,
     ): Job {
         LOGGER.debug(
             "Creating batch job jobId={} processorType={} fileType={} chunkSize={} skipLimit={}",
@@ -78,7 +78,7 @@ class FileProcessingJobFactory(
             accumulator = accumulator,
             fileType = fileType,
             processorType = processor.processorType,
-            originalFileName = initialRecord.originalFileName,
+            originalFileName = record.originalFileName,
             resultBaseDir = resultBaseDir,
             declaredExtraColumns = processor.extraColumns,
         )
@@ -87,13 +87,13 @@ class FileProcessingJobFactory(
             writer = fileWriter,
             handler = handlerRegistry.find(processor.processorType),
             jobStore = jobStore,
-            initialRecord = initialRecord,
+            record = record,
         )
 
         val rowReader = typedProcessor.rowReader()
         val rowProcessor = typedProcessor.rowProcessor()
 
-        val step: Step = StepBuilder("step-$jobId", jobRepository)
+        val step: Step = StepBuilder("job-$jobId", jobRepository)
             .chunk<SpreadsheetRow, SpreadsheetRow>(typedProcessor.chunkSize)
             .transactionManager(transactionManager)
             .reader(reader)

@@ -60,9 +60,9 @@ class BatchJobServiceTest {
         every { jobRepository.createJobInstance("job-job-1", any()) } returns jobInstance
         every { jobRepository.createJobExecution(jobInstance, any(), any()) } returns jobExecution
 
-        val initialRecordSlot = slot<BulkJobRecord>()
+        val factoryRecordSlot = slot<BulkJobRecord>()
         every {
-            jobFactory.create(any(), any(), any(), any(), capture(initialRecordSlot))
+            jobFactory.create(any(), any(), any(), any(), capture(factoryRecordSlot))
         } returns job
 
         val recordSlot = slot<BulkJobRecord>()
@@ -80,8 +80,8 @@ class BatchJobServiceTest {
         assertEquals(BatchStatus.STARTED, recordSlot.captured.status)
         assertEquals("invoice-upload", recordSlot.captured.processorType)
         assertEquals("invoices.csv", recordSlot.captured.originalFileName)
-        assertEquals(initialRecordSlot.captured.startedAt, recordSlot.captured.startedAt)
-        assertEquals(recordSlot.captured, initialRecordSlot.captured)
+        assertEquals(factoryRecordSlot.captured.startedAt, recordSlot.captured.startedAt)
+        assertEquals(recordSlot.captured, factoryRecordSlot.captured)
         verify { jobStore.save(any()) }
     }
 

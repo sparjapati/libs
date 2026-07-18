@@ -33,14 +33,14 @@ class BatchJobCompletionListenerTest {
         if (failureMessage != null) {
             execution.addFailureException(RuntimeException(failureMessage))
         }
-        val step = StepExecution("step-job-1", execution)
+        val step = StepExecution("job-job-1", execution)
         step.writeCount = 5
         step.writeSkipCount = 1
         execution.addStepExecution(step)
         return execution
     }
 
-    private fun initialRecord(): BulkJobRecord = BulkJobRecord(
+    private fun record(): BulkJobRecord = BulkJobRecord(
         jobId = "job-1",
         processorType = "invoice-upload",
         status = BatchStatus.STARTED,
@@ -56,7 +56,7 @@ class BatchJobCompletionListenerTest {
     @Test
     fun `saves a COMPLETED record with counts and result file`() {
         every { writer.write() } returns "/tmp/result.csv"
-        val listener = BatchJobCompletionListener(writer, handler, jobStore, initialRecord())
+        val listener = BatchJobCompletionListener(writer, handler, jobStore, record())
         val recordSlot = slot<BulkJobRecord>()
         every { jobStore.save(capture(recordSlot)) } returns Unit
 
@@ -76,7 +76,7 @@ class BatchJobCompletionListenerTest {
     @Test
     fun `saves a FAILED record with the failure message`() {
         every { writer.write() } returns null
-        val listener = BatchJobCompletionListener(writer, handler, jobStore, initialRecord())
+        val listener = BatchJobCompletionListener(writer, handler, jobStore, record())
         val recordSlot = slot<BulkJobRecord>()
         every { jobStore.save(capture(recordSlot)) } returns Unit
 
@@ -90,7 +90,7 @@ class BatchJobCompletionListenerTest {
     fun `a throwing jobStore does not prevent the completion handler from running`() {
         every { writer.write() } returns "/tmp/result.csv"
         every { jobStore.save(any()) } throws RuntimeException("store down")
-        val listener = BatchJobCompletionListener(writer, handler, jobStore, initialRecord())
+        val listener = BatchJobCompletionListener(writer, handler, jobStore, record())
 
         listener.afterJob(jobExecution(BatchStatus.COMPLETED))
 
