@@ -18,20 +18,22 @@ class RowAccumulator {
 
     private val errors = HashMap<Int, String>()
     private val rowExtras = HashMap<Int, ExtraColumns>()
-
-    private var _headers: List<String>? = null
     private val _rowNumbers = mutableListOf<Int>()
-    private var _rowCount = 0
-    private var _discoveredExtraColumns: List<String> = emptyList()
 
     // Inline file: every row written here during reading, pre-stamped SUCCESS.
     internal val inlineFile: File = Files.createTempFile(BulkTempFileCleanupRunner.PREFIX_INLINE, ".csv").toFile()
     private val inlinePrinter = CSVFormat.DEFAULT.print(inlineFile.bufferedWriter())
 
-    val headers: List<String>? get() = _headers
+    var headers: List<String>? = null
+        private set
+
+    var rowCount: Int = 0
+        private set
+
+    var discoveredExtraColumns: List<String> = emptyList()
+        private set
+
     val rowNumbers: List<Int> get() = _rowNumbers
-    val rowCount: Int get() = _rowCount
-    val discoveredExtraColumns: List<String> get() = _discoveredExtraColumns
     val errorMap: Map<Int, String> get() = errors
     val extrasMap: Map<Int, ExtraColumns> get() = rowExtras
 
@@ -40,17 +42,17 @@ class RowAccumulator {
      * Pre-stamps each row as SUCCESS; errors are corrected by [ResultFileWriter] if needed.
      */
     fun recordRow(row: SpreadsheetRow) {
-        if (_headers == null) {
-            _headers = row.values.keys.toList()
-            inlinePrinter.printRecord(_headers!! + STATUS_COLUMN + FAILURE_REASON_COLUMN)
+        if (headers == null) {
+            headers = row.values.keys.toList()
+            inlinePrinter.printRecord(headers!! + STATUS_COLUMN + FAILURE_REASON_COLUMN)
         }
         _rowNumbers.add(row.rowNumber)
         inlinePrinter.printRecord(buildList {
-            _headers!!.forEach { add(row.values[it].takeUnless { v -> v.isNullOrBlank() } ?: EMPTY_CELL_VALUE) }
+            headers!!.forEach { add(row.values[it].takeUnless { v -> v.isNullOrBlank() } ?: EMPTY_CELL_VALUE) }
             add(STATUS_SUCCESS)
             add(EMPTY_CELL_VALUE)
         })
-        _rowCount++
+        rowCount++
     }
 
     /** Marks row [rowNumber] as failed with [error]. */
@@ -66,8 +68,8 @@ class RowAccumulator {
     fun recordExtra(rowNumber: Int, extra: ExtraColumns) {
         if (extra.isEmpty()) return
         rowExtras[rowNumber] = extra
-        if (_discoveredExtraColumns.isEmpty()) {
-            _discoveredExtraColumns = extra.keys.toList()
+        if (discoveredExtraColumns.isEmpty()) {
+            discoveredExtraColumns = extra.keys.toList()
         }
     }
 
