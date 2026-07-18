@@ -1,6 +1,7 @@
 package com.bulkFileProcessing.batch
 
 import com.bulkFileProcessing.batch.reader.SpreadsheetItemReader
+import com.bulkFileProcessing.jobstore.BulkJobStore
 import org.slf4j.LoggerFactory
 import java.io.File
 import org.springframework.batch.core.job.Job
@@ -29,11 +30,13 @@ import org.springframework.transaction.PlatformTransactionManager
  * @param jobRepository      Spring Batch job repository (auto-configured by Spring Boot).
  * @param transactionManager transaction manager used for chunk-based step execution.
  * @param handlerRegistry    registry of completion handlers; looked up by processorType after each job.
+ * @param jobStore           receives the final [com.bulkFileProcessing.jobstore.BulkJobRecord] for each job run.
  */
 class FileProcessingJobFactory(
     private val jobRepository: JobRepository,
     private val transactionManager: PlatformTransactionManager,
     private val handlerRegistry: BulkJobCompletionHandlerRegistry,
+    private val jobStore: BulkJobStore,
     private val resultBaseDir: File,
 ) {
 
@@ -53,6 +56,7 @@ class FileProcessingJobFactory(
      * @param filePath         absolute path to the uploaded temp file.
      * @param fileType         "csv" or "xlsx".
      * @param originalFileName the original uploaded filename; used to name the result file.
+     * @param startedAt        epoch millis when the job was launched; carried into the final job record.
      */
     @Suppress("UNCHECKED_CAST")
     fun create(
@@ -61,6 +65,7 @@ class FileProcessingJobFactory(
         filePath: String,
         fileType: String,
         originalFileName: String,
+        startedAt: Long,
     ): Job {
         LOGGER.debug(
             "Creating batch job jobId={} processorType={} fileType={} chunkSize={} skipLimit={}",
@@ -80,6 +85,9 @@ class FileProcessingJobFactory(
         val jobListener = BatchJobCompletionListener(
             writer = fileWriter,
             handler = handlerRegistry.find(processor.processorType),
+            jobStore = jobStore,
+            originalFileName = originalFileName,
+            startedAt = startedAt,
         )
 
         val rowReader = typedProcessor.rowReader()

@@ -2,24 +2,34 @@ package com.bulkFileProcessing.batch
 
 import com.bulkFileProcessing.events.BulkJobCompletionHandler
 import com.bulkFileProcessing.events.BulkJobResult
+import com.bulkFileProcessing.jobstore.BulkJobRecord
+import com.bulkFileProcessing.jobstore.BulkJobStore
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.BatchStatus
 import org.springframework.batch.core.job.JobExecution
 import org.springframework.batch.core.listener.JobExecutionListener
 
 /**
  * Fires after every bulk file processing job finishes, regardless of outcome.
  *
- * Writes the annotated result file via [ResultFileWriter], then calls
- * [BulkJobCompletionHandler.onJobCompleted] if a handler was registered for this job's
- * processor type. The handler is resolved once at job creation time by
- * [FileProcessingJobFactory] and passed in directly — this listener has no registry dependency.
+ * Writes the annotated result file via [ResultFileWriter], records the final outcome in
+ * [jobStore], then calls [BulkJobCompletionHandler.onJobCompleted] if a handler was
+ * registered for this job's processor type. The handler is resolved once at job creation
+ * time by [FileProcessingJobFactory] and passed in directly — this listener has no
+ * registry dependency.
  *
- * @param writer  the per-job [ResultFileWriter] that produces the annotated output file.
- * @param handler the completion handler for this processor type, or `null` if none registered.
+ * @param writer            the per-job [ResultFileWriter] that produces the annotated output file.
+ * @param handler           the completion handler for this processor type, or `null` if none registered.
+ * @param jobStore          receives the final [BulkJobRecord] for this job run.
+ * @param originalFileName  the original uploaded filename, carried through from [BatchJobService.launch].
+ * @param startedAt         epoch millis when the job was launched, carried through from [BatchJobService.launch].
  */
 class BatchJobCompletionListener(
     private val writer: ResultFileWriter,
     private val handler: BulkJobCompletionHandler?,
+    private val jobStore: BulkJobStore,
+    private val originalFileName: String,
+    private val startedAt: Long,
 ) : JobExecutionListener {
 
     companion object {
@@ -39,6 +49,26 @@ class BatchJobCompletionListener(
         LOGGER.info(
             "Bulk job completed jobId={} processorType={} status={} writeCount={} skipCount={} resultFile={}",
             jobId, processorType, jobExecution.status, writeCount, skipCount, resultFilePath,
+        )
+
+        val errorMessage = jobExecution.allFailureExceptions
+            .firstOrNull()
+            ?.message
+            .takeIf { jobExecution.status == BatchStatus.FAILED }
+
+        trySave(
+            BulkJobRecord(
+                jobId = jobId,
+                processorType = processorType,
+                status = jobExecution.status,
+                writeCount = writeCount,
+                skipCount = skipCount,
+                resultFilePath = resultFilePath,
+                errorMessage = errorMessage,
+                originalFileName = originalFileName,
+                startedAt = startedAt,
+                completedAt = System.currentTimeMillis(),
+            ),
         )
 
         if (handler == null) {
@@ -61,6 +91,17 @@ class BatchJobCompletionListener(
                 processorType, jobId, ex,
             )
             throw ex
+        }
+    }
+
+    private fun trySave(record: BulkJobRecord) {
+        try {
+            jobStore.save(record)
+        } catch (ex: Exception) {
+            LOGGER.error(
+                "BulkJobStore.save failed for jobId={} processorType={} status={} — job continues, record not persisted",
+                record.jobId, record.processorType, record.status, ex,
+            )
         }
     }
 }
