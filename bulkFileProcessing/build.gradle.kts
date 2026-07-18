@@ -10,12 +10,15 @@ dependencies {
     api(libs.spring.boot.batch)
     api(libs.poi.ooxml)
     api(libs.commons.csv)
+    api(platform(libs.spring.data.bom))
+    api(libs.spring.data.commons)
     compileOnly(libs.spring.boot.autoconfigure)
     compileOnly("org.springframework:spring-web")
     implementation(libs.slf4j.api)
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation(libs.mockk)
 }
 
 tasks.withType<Test> {

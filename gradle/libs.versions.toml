@@ -33,6 +33,7 @@ spring-webmvc = { module = "org.springframework:spring-webmvc" }
 
 spring-data-jpa = { module = "org.springframework.data:spring-data-jpa" }
 spring-data-mongodb = { module = "org.springframework.data:spring-data-mongodb" }
+spring-data-commons = { module = "org.springframework.data:spring-data-commons" }
 spring-data-elasticsearch = { module = "org.springframework.data:spring-data-elasticsearch" }
 
 jakarta-persistence = { module = "jakarta.persistence:jakarta.persistence-api", version.ref = "jakarta-persistence" }
