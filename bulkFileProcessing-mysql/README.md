@@ -41,18 +41,21 @@ Table: **`bulk_job_record`**
 
 | Column | Type | Notes |
 |---|---|---|
-| `job_id` | `VARCHAR(255)` | Primary key |
-| `processor_type` | `VARCHAR(255)` NOT NULL | |
+| `jobId` | `VARCHAR(255)` | Primary key |
+| `processorType` | `VARCHAR(255)` NOT NULL | |
 | `status` | `VARCHAR(255)` NOT NULL | Spring Batch `BatchStatus` name, e.g. `STARTED`, `COMPLETED`, `FAILED` |
-| `write_count` | `BIGINT` NOT NULL | |
-| `skip_count` | `BIGINT` NOT NULL | |
-| `result_file_path` | `VARCHAR(255)` | Nullable |
-| `error_message` | `TEXT` | Nullable; non-null only when `status = 'FAILED'` |
-| `original_file_name` | `VARCHAR(255)` NOT NULL | |
-| `started_at` | `BIGINT` NOT NULL | Epoch millis |
-| `completed_at` | `BIGINT` | Epoch millis; nullable while the job is still running |
+| `writeCount` | `BIGINT` NOT NULL | |
+| `skipCount` | `BIGINT` NOT NULL | |
+| `resultFilePath` | `VARCHAR(255)` | Nullable |
+| `errorMessage` | `TEXT` | Nullable; non-null only when `status = 'FAILED'` |
+| `originalFileName` | `VARCHAR(255)` NOT NULL | |
+| `startedAt` | `BIGINT` NOT NULL | Epoch millis |
+| `completedAt` | `BIGINT` | Epoch millis; nullable while the job is still running |
 
-Indexed on `(processor_type, status)` as `idx_bulk_job_record_processor_type_status` to support
+Column names are camelCase, matching the entity's Kotlin properties exactly (not the
+snake_case Hibernate would otherwise default to).
+
+Indexed on `(processorType, status)` as `idx_bulk_job_record_processor_type_status` to support
 `BulkJobStore.findAll` filtering.
 
 A migration is not shipped by this library — apply the DDL in your own app's migrations.

@@ -12,15 +12,15 @@ import org.springframework.batch.core.BatchStatus
 @Entity(name = "bulkJobRecord")
 @Table(
     name = "bulk_job_record",
-    indexes = [Index(name = "idx_bulk_job_record_processor_type_status", columnList = "processor_type,status")],
+    indexes = [Index(name = "idx_bulk_job_record_processor_type_status", columnList = "processorType,status")],
 )
 class BulkJobRecordEntity {
     @Id
-    @Column(name = "job_id", length = 255)
+    @Column(name = "jobId", length = 255)
     var jobId: String = ""
         private set
 
-    @Column(name = "processor_type", nullable = false)
+    @Column(name = "processorType", nullable = false)
     var processorType: String = ""
         private set
 
@@ -29,31 +29,31 @@ class BulkJobRecordEntity {
     var status: BatchStatus = BatchStatus.STARTING
         private set
 
-    @Column(name = "write_count", nullable = false)
+    @Column(name = "writeCount", nullable = false)
     var writeCount: Long = 0
         private set
 
-    @Column(name = "skip_count", nullable = false)
+    @Column(name = "skipCount", nullable = false)
     var skipCount: Long = 0
         private set
 
-    @Column(name = "result_file_path")
+    @Column(name = "resultFilePath")
     var resultFilePath: String? = null
         private set
 
-    @Column(name = "error_message", columnDefinition = "TEXT")
+    @Column(name = "errorMessage", columnDefinition = "TEXT")
     var errorMessage: String? = null
         private set
 
-    @Column(name = "original_file_name", nullable = false)
+    @Column(name = "originalFileName", nullable = false)
     var originalFileName: String = ""
         private set
 
-    @Column(name = "started_at", nullable = false)
+    @Column(name = "startedAt", nullable = false)
     var startedAt: Long = 0
         private set
 
-    @Column(name = "completed_at")
+    @Column(name = "completedAt")
     var completedAt: Long? = null
         private set
 
