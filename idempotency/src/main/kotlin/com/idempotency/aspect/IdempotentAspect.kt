@@ -66,7 +66,7 @@ class IdempotentAspect(
         val argsHash = support.hashArgs(args)
         val ttlSeconds = idempotent.ttlSeconds.takeIf { it > 0 } ?: props.defaultTtlSeconds
 
-        return when (val claimResult = store.claim(key, idempotent.operation, argsHash, ttlSeconds)) {
+        return when (val claimResult = store.claim(key = key, operation = idempotent.operation, argsHash = argsHash, ttlSeconds = ttlSeconds)) {
             is ClaimResult.Claimed -> runAndRecord(invocation, idempotent, key, argsHash, ttlSeconds)
             ClaimResult.NotFound -> throw UnknownIdempotencyKeyException(
                 "Idempotency key was never issued (or has expired) key=$key operation=${idempotent.operation}",
@@ -84,11 +84,11 @@ class IdempotentAspect(
     ): Any? {
         try {
             val value = invocation.proceed()
-            store.complete(key, idempotent.operation, argsHash, support.serialize(value), ttlSeconds)
+            store.complete(key = key, operation = idempotent.operation, argsHash = argsHash, response = support.serialize(value), ttlSeconds = ttlSeconds)
             return value
         } catch (ex: Throwable) {
             log.debug("@Idempotent key={} operation={} failed, recording FAILED", key, idempotent.operation)
-            store.fail(key, idempotent.operation, argsHash, ex.javaClass.name, ex.message, ttlSeconds)
+            store.fail(key = key, operation = idempotent.operation, argsHash = argsHash, exceptionClassName = ex.javaClass.name, exceptionMessage = ex.message, ttlSeconds = ttlSeconds)
             throw ex
         }
     }
