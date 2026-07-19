@@ -25,6 +25,8 @@ All artifacts are published under `com.sparjapati` and consumed via `mavenLocal(
 | `cacheStore-mongo` | 0.0.1 | MongoDB-backed `CacheStore` adapter for cacheStore |
 | `statusTransitionHistory` | 0.0.1 | Append-only status-transition history log for domain entities |
 | `statusTransitionHistory-mysql` | 0.0.1 | JPA-backed `StatusTransitionStore` adapter for statusTransitionHistory |
+| `idempotency` | 0.0.1 | Server-issued idempotency keys (`@Idempotent`) |
+| `idempotency-redis` | 0.0.1 | Redis-backed `IdempotencyStore` adapter for idempotency |
 
 ---
 
