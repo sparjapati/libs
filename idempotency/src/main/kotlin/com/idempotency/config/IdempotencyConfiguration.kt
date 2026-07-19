@@ -41,7 +41,7 @@ class IdempotencyConfiguration : ImportAware {
         props: IdempotencyProperties,
         support: IdempotencySupport,
     ): DefaultPointcutAdvisor =
-        DefaultPointcutAdvisor(buildPointcut(), IdempotentAspect(store, props, support))
+        DefaultPointcutAdvisor(buildPointcut(), IdempotentAspect(store = store, props = props, support = support))
 
     private fun buildPointcut(): AspectJExpressionPointcut {
         val annotationExpr = "@annotation(${Idempotent::class.java.name})"
