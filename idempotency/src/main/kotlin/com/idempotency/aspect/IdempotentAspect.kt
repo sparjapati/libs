@@ -82,15 +82,15 @@ class IdempotentAspect(
         argsHash: String,
         ttlSeconds: Long,
     ): Any? {
-        try {
-            val value = invocation.proceed()
-            store.complete(key = key, operation = idempotent.operation, argsHash = argsHash, response = support.serialize(value), ttlSeconds = ttlSeconds)
-            return value
+        val value = try {
+            invocation.proceed()
         } catch (ex: Throwable) {
             log.debug("@Idempotent key={} operation={} failed, recording FAILED", key, idempotent.operation)
             store.fail(key = key, operation = idempotent.operation, argsHash = argsHash, exceptionClassName = ex.javaClass.name, exceptionMessage = ex.message, ttlSeconds = ttlSeconds)
             throw ex
         }
+        store.complete(key = key, operation = idempotent.operation, argsHash = argsHash, response = support.serialize(value), ttlSeconds = ttlSeconds)
+        return value
     }
 
     private fun handleExisting(

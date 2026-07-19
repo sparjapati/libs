@@ -3,6 +3,7 @@ package com.idempotency.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.idempotency.EnableIdempotency
 import com.idempotency.Idempotent
+import com.idempotency.IdempotencyKeyIssuer
 import com.idempotency.IdempotencyProperties
 import com.idempotency.IdempotencyStore
 import com.idempotency.aspect.IdempotentAspect
@@ -34,6 +35,10 @@ class IdempotencyConfiguration : ImportAware {
 
     @Bean
     fun idempotencySupport(objectMapper: ObjectMapper): IdempotencySupport = IdempotencySupport(objectMapper)
+
+    @Bean
+    fun idempotencyKeyIssuer(store: IdempotencyStore, props: IdempotencyProperties): IdempotencyKeyIssuer =
+        IdempotencyKeyIssuer(store = store, props = props)
 
     @Bean
     fun idempotentAdvisor(

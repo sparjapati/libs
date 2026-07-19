@@ -1,6 +1,7 @@
 package com.idempotency.config
 
 import com.idempotency.EnableIdempotency
+import com.idempotency.IdempotencyKeyIssuer
 import com.idempotency.IdempotencyProperties
 import com.idempotency.IdempotencyStore
 import com.idempotency.aspect.IdempotentAspect
@@ -8,6 +9,7 @@ import com.idempotency.support.IdempotencySupport
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.aop.aspectj.AspectJExpressionPointcut
@@ -22,6 +24,12 @@ class IdempotencyConfigurationTest {
     private val store: IdempotencyStore = mockk()
     private val props = IdempotencyProperties()
     private val support = IdempotencySupport(jacksonObjectMapper())
+
+    @Test fun `idempotencyKeyIssuer bean is created`() {
+        val config = IdempotencyConfiguration()
+        val issuer: IdempotencyKeyIssuer = config.idempotencyKeyIssuer(store, props)
+        assertNotNull(issuer)
+    }
 
     @Test fun `idempotentAdvisor wraps an IdempotentAspect built from the given beans`() {
         val config = IdempotencyConfiguration()

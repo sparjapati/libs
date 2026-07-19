@@ -1,8 +1,10 @@
 package com.idempotency.aspect
 
+import com.idempotency.ClaimResult
 import com.idempotency.Idempotent
 import com.idempotency.IdempotencyProperties
 import com.idempotency.IdempotencyStatus
+import com.idempotency.IdempotencyStore
 import com.idempotency.InMemoryIdempotencyStore
 import com.idempotency.exception.IdempotencyInProgressException
 import com.idempotency.exception.IdempotencyKeyReusedException
@@ -14,6 +16,7 @@ import com.idempotency.support.IdempotencySupport
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.aopalliance.intercept.MethodInvocation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -133,6 +136,23 @@ class IdempotentAspectTest {
             aspect.invoke(invocationFor(arrayOf(70)) { "should not run" })
         }
         assertEquals("boom-70", replayed.message)
+    }
+
+    @Test fun `a store failure recording COMPLETED after a successful call propagates the store's exception without recording FAILED`() {
+        val mockStore = mockk<IdempotencyStore>()
+        val storeException = RuntimeException("store down")
+        every { mockStore.claim(key = "key-9", operation = "createOrder", argsHash = any(), ttlSeconds = props.defaultTtlSeconds) } returns ClaimResult.Claimed
+        every { mockStore.complete(key = "key-9", operation = "createOrder", argsHash = any(), response = any(), ttlSeconds = props.defaultTtlSeconds) } throws storeException
+        val aspect = IdempotentAspect(mockStore, props, support) { "key-9" }
+
+        val thrown = assertThrows(RuntimeException::class.java) {
+            aspect.invoke(invocationFor(arrayOf(90)) { "order-for-90" })
+        }
+
+        assertEquals("store down", thrown.message)
+        verify(exactly = 0) {
+            mockStore.fail(key = any(), operation = any(), argsHash = any(), exceptionClassName = any(), exceptionMessage = any(), ttlSeconds = any())
+        }
     }
 
     @Test fun `retry after a failure whose type cannot be reconstructed wraps in IdempotentOperationFailedException`() {
