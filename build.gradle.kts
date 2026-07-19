@@ -58,3 +58,6 @@ project(":statusTransitionHistory-mysql") {
 project(":idempotency") {
     version = property("idempotencyVersion") as String
 }
+project(":idempotency-redis") {
+    version = property("idempotencyRedisVersion") as String
+}
