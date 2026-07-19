@@ -1,14 +1,18 @@
 package com.idempotency.redis
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.idempotency.ClaimResult
 import com.idempotency.IdempotencyRecord
 import com.idempotency.IdempotencyStatus
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.SetArgs
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class RedisIdempotencyStoreTest {
@@ -58,5 +62,68 @@ class RedisIdempotencyStoreTest {
         assertEquals(IdempotencyStatus.FAILED, record.status)
         assertEquals("java.lang.IllegalStateException", record.exceptionClassName)
         assertEquals("boom", record.exceptionMessage)
+    }
+
+    @Test fun `claim returns Claimed when evalsha returns the CLAIMED sentinel`() {
+        every {
+            redisCommands.evalsha<String>(
+                any<String>(), any<ScriptOutputType>(), any<Array<String>>(),
+                any<String>(), any<String>(), any<String>(),
+            )
+        } returns "__IDEMPOTENCY_CLAIMED__"
+
+        val result = store.claim(key = "key-2", operation = "createOrder", argsHash = "hash-1", ttlSeconds = 900)
+
+        assertEquals(ClaimResult.Claimed, result)
+    }
+
+    @Test fun `claim returns NotFound when evalsha returns the NOT_FOUND sentinel`() {
+        every {
+            redisCommands.evalsha<String>(
+                any<String>(), any<ScriptOutputType>(), any<Array<String>>(),
+                any<String>(), any<String>(), any<String>(),
+            )
+        } returns "__IDEMPOTENCY_NOT_FOUND__"
+
+        val result = store.claim(key = "key-3", operation = "createOrder", argsHash = "hash-1", ttlSeconds = 900)
+
+        assertEquals(ClaimResult.NotFound, result)
+    }
+
+    @Test fun `claim returns Existing decoded from the raw JSON when the script doesn't claim`() {
+        val existingJson = objectMapper.writeValueAsString(
+            IdempotencyRecord(status = IdempotencyStatus.IN_PROGRESS, operation = "createOrder", argsHash = "hash-1"),
+        )
+        every {
+            redisCommands.evalsha<String>(
+                any<String>(), any<ScriptOutputType>(), any<Array<String>>(),
+                any<String>(), any<String>(), any<String>(),
+            )
+        } returns existingJson
+
+        val result = store.claim(key = "key-4", operation = "createOrder", argsHash = "hash-1", ttlSeconds = 900)
+
+        assertTrue(result is ClaimResult.Existing)
+        assertEquals(IdempotencyStatus.IN_PROGRESS, (result as ClaimResult.Existing).record.status)
+    }
+
+    @Test fun `claim passes the prefixed key, operation, argsHash and ttl to the script`() {
+        every {
+            redisCommands.evalsha<String>(
+                any<String>(), any<ScriptOutputType>(), any<Array<String>>(),
+                any<String>(), any<String>(), any<String>(),
+            )
+        } returns "__IDEMPOTENCY_CLAIMED__"
+
+        store.claim(key = "key-5", operation = "createOrder", argsHash = "hash-9", ttlSeconds = 300)
+
+        verify {
+            redisCommands.evalsha<String>(
+                eq("sha123"),
+                eq(ScriptOutputType.VALUE),
+                match<Array<String>> { it.contentEquals(arrayOf("testIdem:key-5")) },
+                eq("createOrder"), eq("hash-9"), eq("300"),
+            )
+        }
     }
 }
